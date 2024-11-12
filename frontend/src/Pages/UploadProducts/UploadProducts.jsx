@@ -12,6 +12,7 @@ function UploadProducts() {
 
   // Function to send product data to the backend and update the products state
   function upsert_into_pinecone(productName, productDescription, productPrice) {
+    console.log("upsert_into_pinecone called") // Debug log
     fetch("https://bartrade.koyeb.app:8000/insert", {
       method: "POST",
       headers: {
@@ -50,6 +51,7 @@ function UploadProducts() {
   // Handle form submit
   const handleSubmit = (e) => {
     e.preventDefault();
+    console.log("submit clicked")
     upsert_into_pinecone(formData.productName, formData.productDescription, formData.productPrice);
 
     setFormData({
