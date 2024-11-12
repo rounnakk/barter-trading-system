@@ -12,7 +12,7 @@ function UploadProducts() {
 
   // Function to send product data to the backend and update the products state
   function upsert_into_pinecone(productName, productDescription, productPrice) {
-    fetch("http://localhost:8000/insert", {
+    fetch("https://bartrade.koyeb.app/insert", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
