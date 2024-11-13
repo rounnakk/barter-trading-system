@@ -33,9 +33,12 @@ function UploadProducts() {
       .then((data) => {
         console.log("API response:", data); // Debug log
 
-        // Since `data` is an array, you should update the products state by appending the new array
+        // Ensure only the latest 5 products are shown
         if (Array.isArray(data)) {
-          setProducts((prevProducts) => [...prevProducts, ...data]); // Appending new products
+          setProducts((prevProducts) => {
+            const newProducts = [...data, ...prevProducts];
+            return newProducts.slice(0, 5); // Keep only the latest 5 products
+          });
         }
       })
       .catch((error) => {
