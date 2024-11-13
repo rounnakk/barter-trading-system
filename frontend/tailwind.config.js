@@ -5,9 +5,9 @@ const { default: flattenColorPalette } = require("tailwindcss/lib/util/flattenCo
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    "./src/**/*.{js,jsx,ts,tsx}", // Matches your React project structure (updated for .ts, .tsx)
+    "./src/**/*.{js,jsx,ts,tsx}", // Matches your React project structure
   ],
-  darkMode: "class", // Enables dark mode based on a class (optional)
+  darkMode: "class", // Enables dark mode based on a class
   theme: {
     extend: {
       animation: {

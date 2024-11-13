@@ -3,8 +3,28 @@ import './UploadProducts.css'
 import { Label } from '../../Components/Label';
 import { Input } from '../../Components/Input';
 import { HoverBorderGradient } from '../../Components/HoverBorderGradient';
+import { MultiStepLoader as Loader } from '../../Components/MultiStepLoader';
+
+const loadingStates = [
+  {
+    text: "Uploading your product",
+  },
+  {
+    text: "Generating Embeddings",
+  },
+  {
+    text: "Comparing Items",
+  },
+  {
+    text: "Personalising Recommendations",
+  }
+];
+
 
 function UploadProducts() {
+  const [loading, setLoading] = useState(false);
+
+
   const [formData, setFormData] = useState({
     productName: '',
     productDescription: '',
@@ -12,6 +32,8 @@ function UploadProducts() {
   });
 
   const [products, setProducts] = useState([]);
+
+  
 
   // Function to send product data to the backend and update the products state
   function upsert_into_pinecone(productName, productDescription, productPrice) {
@@ -58,9 +80,13 @@ function UploadProducts() {
   // Handle form submit
   const handleSubmit = (e) => {
     e.preventDefault();
+    setLoading(true)
+    
     console.log("submit clicked")
     upsert_into_pinecone(formData.productName, formData.productDescription, formData.productPrice);
-
+    setTimeout(()=>{
+      setLoading(false)
+    }, 4800)
     setFormData({
       productName: '',
       productDescription: '',
@@ -70,7 +96,13 @@ function UploadProducts() {
 
   return (
     <div style={{height:'100vh', color:'black'}}>
+    <Loader loadingStates={loadingStates} loading={loading} duration={1200} />
+    
     <div className='main-container'>
+
+
+
+
       <h1 id='header1'>Please provide some details about your product.</h1>
       <form onSubmit={handleSubmit}>
         <Label htmlFor="product-name">Product Name:</Label>
@@ -115,7 +147,7 @@ function UploadProducts() {
         <div style={{ marginTop: '50px',display: 'flex', background:'black',justifyContent: 'center', flexWrap:'wrap' }}>
           {products.length > 0 ? (
             products.map((product, index) => (
-              <div key={index} style={{ zIndex:40, color: 'white', background:'black' , border: '1px solid white', padding: '10px', margin: '10px 10px' }}>
+              <div key={index} style={{ zIndex:40, color: 'white', background:'black', maxWidth:'350px' , border: '1px solid white', padding: '10px', margin: '10px 10px' }}>
                 <h3 style={{fontSize: '20px'}}>{product.productName}</h3>
                 <p style={{fontSize:'15px', color: '#acacac'}}>{product.productDescription}</p>
                 <p style={{color:'#00f400'}}>₹{product.productPrice}</p>
