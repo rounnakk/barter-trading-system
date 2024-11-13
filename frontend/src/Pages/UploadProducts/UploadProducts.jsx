@@ -119,7 +119,7 @@ function UploadProducts() {
               </div>
             ))
           ) : (
-            <p className='waiting'>Waiting for product submission...</p>
+            <p className='waiting' style={{marginBottom:'50px'}}>Waiting for product submission...</p>
           )}
         </div>
       </div>
