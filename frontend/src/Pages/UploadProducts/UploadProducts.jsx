@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import './UploadProducts.css'
+import { Label } from '../../Components/Label';
+import { Input } from '../../Components/Input';
+import { HoverBorderGradient } from '../../Components/HoverBorderGradient';
 
 function UploadProducts() {
   const [formData, setFormData] = useState({
@@ -14,6 +17,7 @@ function UploadProducts() {
   function upsert_into_pinecone(productName, productDescription, productPrice) {
     console.log("upsert_into_pinecone called") // Debug log
     fetch("https://bartrade.koyeb.app/insert", {
+    // fetch("http://localhost:8000/insert", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -62,11 +66,12 @@ function UploadProducts() {
   };
 
   return (
-    <div>
+    <div style={{height:'100vh', color:'black'}}>
+    <div className='main-container'>
       <h1 id='header1'>Please provide some details about your product.</h1>
       <form onSubmit={handleSubmit}>
-        <label htmlFor="product-name">Product Name:</label>
-        <input
+        <Label htmlFor="product-name">Product Name:</Label>
+        <Input
           type="text"
           id="product-name"
           name="productName"
@@ -74,8 +79,8 @@ function UploadProducts() {
           onChange={handleChange}
           required
         />
-        <label htmlFor="product-description">Product Description:</label>
-        <input
+        <Label htmlFor="product-description">Product Description:</Label>
+        <Input
           type="text"
           id="product-description"
           name="productDescription"
@@ -83,8 +88,8 @@ function UploadProducts() {
           onChange={handleChange}
           required
         />
-        <label htmlFor="product-price">Product Price:</label>
-        <input
+        <Label htmlFor="product-price">Product Price:</Label>
+        <Input
           type="number"
           id="product-price"
           name="productPrice"
@@ -92,25 +97,33 @@ function UploadProducts() {
           onChange={handleChange}
           required
         />
-        <button type="submit">Submit</button>
+        <button type="submit" style={{paddingTop: '30px'}} className='submit-button'>
+        <HoverBorderGradient type="submit" className=" bg-black text-white  flex items-center space-x-2 ">
+        
+        <span className='text-1xl font-bold'>Submit</span>
+        <img src='./arrow.png' className="invert rotate-[315deg] h-[25px] m-[-3px_-8px_-4px_2px] overflow-hidden p-0"
+ alt=''></img>
+      </HoverBorderGradient>
+      </button>
       </form>
 
       <div>
-        <h2>Recommendations</h2>
-        <div style={{ display: 'flex' }}>
+        <h2 style={{fontWeight: 500}}>Recommendations</h2>
+        <div style={{ marginTop: '50px',display: 'flex', background:'black',justifyContent: 'center', flexWrap:'wrap' }}>
           {products.length > 0 ? (
             products.map((product, index) => (
-              <div key={index} style={{ border: '1px solid #000', padding: '10px', margin: '10px 10px' }}>
-                <h3>{product.productName}</h3>
-                <p>Description: {product.productDescription}</p>
-                <p>Price: ₹{product.productPrice}</p>
+              <div key={index} style={{ zIndex:40, color: 'white', background:'black' , border: '1px solid white', padding: '10px', margin: '10px 10px' }}>
+                <h3 style={{fontSize: '20px'}}>{product.productName}</h3>
+                <p style={{fontSize:'15px', color: '#acacac'}}>{product.productDescription}</p>
+                <p style={{color:'#00f400'}}>₹{product.productPrice}</p>
               </div>
             ))
           ) : (
-            <p>Waiting for product submission...</p>
+            <p className='waiting'>Waiting for product submission...</p>
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
