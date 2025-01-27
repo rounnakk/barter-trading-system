@@ -7,10 +7,15 @@ from typing import Dict
 from pinecone import Pinecone
 from dotenv import load_dotenv
 import os
+import requests
+
 
 load_dotenv()
 
 API_KEY = os.getenv("API_KEY")
+API_URL = os.getenv("API_URL")
+HF_API = os.getenv("HF_API")
+
 
 
 # Initialize Pinecone with API key from environment variable
@@ -77,6 +82,18 @@ async def insert(data: ProdutData):
     print(product_data)
 
     return product_data
+
+
+
+headers = {"Authorization": HF_API }
+
+def query(filename):
+	with open(filename, "rb") as f:
+		data = f.read()
+	response = requests.post(API_URL, headers=headers, data=data)
+	return response.json()
+
+output = query("car.jpg")
 
 
 
