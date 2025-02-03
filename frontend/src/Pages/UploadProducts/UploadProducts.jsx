@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import './UploadProducts.css'
+// import './UploadProducts.css'
 import { Label } from '../../Components/Label';
 import { Input } from '../../Components/Input';
 import { HoverBorderGradient } from '../../Components/HoverBorderGradient';

@@ -1,5 +1,5 @@
 import uuid
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
@@ -8,6 +8,7 @@ from pinecone import Pinecone
 from dotenv import load_dotenv
 import os
 import requests
+import shutil
 
 
 load_dotenv()
@@ -84,17 +85,58 @@ async def insert(data: ProdutData):
     return product_data
 
 
+# Add this endpoint to your main.py
+@app.post("/upload_product")
+async def upload_product(
+    file: UploadFile = File(...),
+    productName: str = Form(...),
+    productDescription: str = Form(...),
+    productPrice: str = Form(...)
+):
+    try:
+        # Create uploads directory if it doesn't exist
+        upload_dir = "uploads"
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+        
+        # Save the uploaded file
+        file_path = os.path.join(upload_dir, file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Process image with HuggingFace API
+        with open(file_path, "rb") as f:
+            image_data = f.read()
+            response = requests.post(
+                API_URL,
+                headers={"Authorization": f"Bearer {HF_API}"},
+                data=image_data
+            )
+            image_analysis = response.json()
+        
+        # Create product metadata
+        metadata = {
+            "productName": productName,
+            "productDescription": productDescription,
+            "productPrice": productPrice,
+            "imageAnalysis": image_analysis
+        }
 
-headers = {"Authorization": HF_API }
+        # Generate embeddings and store in Pinecone
+        id = str(uuid.uuid4())
+        combined_string = f"{productName} {productDescription} {productPrice}"
+        vector = model.encode(combined_string).tolist()
 
-def query(filename):
-	with open(filename, "rb") as f:
-		data = f.read()
-	response = requests.post(API_URL, headers=headers, data=data)
-	return response.json()
+        index.upsert(vectors=[{
+            "id": id,
+            "values": vector,
+            "metadata": metadata
+        }])
 
-output = query("car.jpg")
+        return {"message": "Product uploaded successfully", "metadata": metadata}
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == '__main__':
