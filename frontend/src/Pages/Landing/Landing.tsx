@@ -6,6 +6,8 @@ import { ScrollArea, ScrollBar } from "../../Components/ui/scroll-area.tsx"
 import { Camera, MapPin, Menu, Plus, Search, User } from "lucide-react"
 import { ProductUploadModal } from '../../Components/ProductUploadModal.tsx'
 import { ImageSearchModal } from '../../Components/ImageSearchModal.tsx'
+import { Toaster } from 'sonner';
+
 
 export default function Home() {
   const [location, setLocation] = useState("Location access needed");
@@ -42,6 +44,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-blue-50">
+      <Toaster richColors position='top-right'/>
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-sm">
         <div className="container flex h-14 items-center justify-between px-4">

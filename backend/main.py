@@ -162,13 +162,14 @@ async def upload_product(
 VISION_API_URL = "https://api-inference.huggingface.co/models/google/vit-base-patch16-224"
 TEXT_API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
 
-
 CATEGORY_MAPPING = {
-    'electronics': ['laptop', 'mobile', 'camera', 'headphones'],
-    'furniture': ['chair', 'table', 'sofa', 'bed'],
-    'clothing': ['shirt', 'pants', 'dress', 'shoes'],
-    'books': ['textbook', 'novel', 'magazine'],
-    # Add more categories as needed
+    'electronics': ['laptop', 'mobile', 'camera', 'headphones', 'television', 'watch', 'earphones', 'tablet', 'smartwatch', 'speaker', 'microphone', 'radio', 'projector', 'drone', 'smartphone'],
+    'furniture': ['chair', 'table', 'sofa', 'bed', 'desk', 'cabinet', 'shelf', 'couch', 'stool', 'dresser'],
+    'clothing': ['shirt', 'pants', 'dress', 'shoes', 'jacket', 'skirt', 'sweater', 'jeans', 't-shirt', 'shorts'],
+    'books': ['textbook', 'novel', 'magazine', 'comic', 'manual', 'guide', 'encyclopedia', 'biography', 'journal', 'anthology'],
+    'automobile': ['car', 'bike', 'scooter', 'motorcycle', 'truck', 'van', 'bus', 'bicycle', 'trailer', 'moped'],
+    'sports': ['football', 'cricket', 'tennis', 'basketball', 'baseball', 'hockey', 'golf', 'volleyball', 'badminton', 'rugby'],
+    'other': ['other']
 }
 
 @app.post("/predict_categories")
@@ -200,6 +201,7 @@ async def predict_categories(
             
             if response.status_code == 200:
                 predictions = response.json()
+                print("Predictions:", predictions)
                 # Extract predicted labels
                 for prediction in predictions:
                     label = prediction['label'].lower()
@@ -207,6 +209,7 @@ async def predict_categories(
                     for category, items in CATEGORY_MAPPING.items():
                         if any(item in label for item in items):
                             categories.add(category)
+            print("Categories:", categories)
 
         # Process text (product name and description)
         text_payload = {
@@ -224,11 +227,13 @@ async def predict_categories(
         
         if response.status_code == 200:
             text_predictions = response.json()
+            print("Text Predictions:", text_predictions)
             # Add top 2 predicted categories from text
             scores = text_predictions['scores']
             labels = text_predictions['labels']
-            top_categories = [labels[i] for i in range(min(2, len(scores)))]
+            top_categories = [labels[i] for i in range(min(1, len(scores)))]
             categories.update(top_categories)
+        print("Categories:", categories)
         
         # Add default categories if none were predicted
         if not categories:
