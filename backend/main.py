@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import os
 import requests
 import shutil
+from PIL import Image
+import io
 
 
 load_dotenv()
@@ -137,6 +139,102 @@ async def upload_product(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
+# Add API endpoints
+VISION_API_URL = "https://api-inference.huggingface.co/models/google/vit-base-patch16-224"
+TEXT_API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
+
+
+CATEGORY_MAPPING = {
+    'electronics': ['laptop', 'mobile', 'camera', 'headphones'],
+    'furniture': ['chair', 'table', 'sofa', 'bed'],
+    'clothing': ['shirt', 'pants', 'dress', 'shoes'],
+    'books': ['textbook', 'novel', 'magazine'],
+    # Add more categories as needed
+}
+
+@app.post("/predict_categories")
+async def predict_categories(
+    file1: UploadFile = File(None),
+    file2: UploadFile = File(None),
+    file3: UploadFile = File(None),
+    productName: str = Form(...),
+    productDescription: str = Form(...)
+):
+    try:
+        categories = set()
+        headers = {"Authorization": f"Bearer {HF_API}"}
+
+        # Process images
+        for file in [file1, file2, file3]:
+            if file is None:
+                continue
+                
+            # Read image
+            contents = await file.read()
+            
+            # Send image to Hugging Face API
+            response = requests.post(
+                VISION_API_URL,
+                headers=headers,
+                data=contents
+            )
+            
+            if response.status_code == 200:
+                predictions = response.json()
+                # Extract predicted labels
+                for prediction in predictions:
+                    label = prediction['label'].lower()
+                    # Map prediction to category
+                    for category, items in CATEGORY_MAPPING.items():
+                        if any(item in label for item in items):
+                            categories.add(category)
+
+        # Process text (product name and description)
+        text_payload = {
+            "inputs": f"{productName} {productDescription}",
+            "parameters": {
+                "candidate_labels": list(CATEGORY_MAPPING.keys())
+            }
+        }
+        
+        response = requests.post(
+            TEXT_API_URL,
+            headers=headers,
+            json=text_payload
+        )
+        
+        if response.status_code == 200:
+            text_predictions = response.json()
+            # Add top 2 predicted categories from text
+            scores = text_predictions['scores']
+            labels = text_predictions['labels']
+            top_categories = [labels[i] for i in range(min(2, len(scores)))]
+            categories.update(top_categories)
+        
+        # Add default categories if none were predicted
+        if not categories:
+            categories = {"electronics", "furniture", "clothing"}
+        
+        return {"categories": list(categories)}
+        
+    except Exception as e:
+        print(f"Error processing data: {str(e)}")
+        return {"categories": ["electronics", "furniture", "clothing"]}
+
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
