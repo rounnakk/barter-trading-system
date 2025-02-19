@@ -1,16 +1,53 @@
 import React from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from "../../Components/ui/button.tsx"
 import { Input } from "../../Components/ui/input.tsx"
 import { ScrollArea, ScrollBar } from "../../Components/ui/scroll-area.tsx"
-import { MapPin, Menu, Plus, Search, User } from "lucide-react"
+import { Camera, MapPin, Menu, Plus, Search, User } from "lucide-react"
 import { ProductUploadModal } from '../../Components/ProductUploadModal.tsx'
+import { ImageSearchModal } from '../../Components/ImageSearchModal.tsx'
 
 export default function Home() {
+  const [location, setLocation] = useState("Location access needed");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const response = await fetch(
+              `https://api.opencagedata.com/geocode/v1/json?q=${position.coords.latitude}+${position.coords.longitude}&key=29a8d0f8953c4dd9916f235c1aefe163`
+            );
+            const data = await response.json();
+            const city = data.results[0].components.city || data.results[0].components.town;
+            const postcode = data.results[0].components.postcode;
+            setLocation(`${city} - ${postcode}`);
+          } catch (error) {
+            setLocation("Error fetching location");
+          } finally {
+            setLoading(false);
+          }
+        },
+        (error) => {
+          setLocation("Location access denied");
+          setLoading(false);
+        }
+      );
+    } else {
+      setLocation("Geolocation not supported");
+      setLoading(false);
+    }
+  }, []);
+
   return (
     <main className="min-h-screen bg-blue-50">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-sm">
         <div className="container flex h-14 items-center justify-between px-4">
+          <div className='h-9 w-9 overflow-hidden rounded-3xl'>
+            <img className='filter invert' src='/bt.png' />
+          </div>
           <Button variant="ghost" size="icon">
             <Menu className="h-5 w-5" />
           </Button>
@@ -20,9 +57,14 @@ export default function Home() {
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search" className="pl-8" />
             </div>
+            <ImageSearchModal />
             <Button variant="outline" className="gap-2">
               <MapPin className="h-4 w-4" />
-              Pune - 411004
+              {loading ? (
+                <span className="animate-pulse">Loading location...</span>
+              ) : (
+                location
+              )}
             </Button>
             <ProductUploadModal />
           </div>
@@ -36,7 +78,7 @@ export default function Home() {
       {/* Main Content */}
       <div className="container px-4 py-8">
         <div className="space-y-2 text-center">
-          <h1 className="text-4xl font-bold">For Barter Trade</h1>
+          <h1 className="text-4xl font-bold">Barter Trade</h1>
           <p className="text-lg text-muted-foreground">List a product first</p>
         </div>
 

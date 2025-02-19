@@ -88,7 +88,9 @@ async def insert(data: ProdutData):
 # Add this endpoint to your main.py
 @app.post("/upload_product")
 async def upload_product(
-    file: UploadFile = File(...),
+    file1: UploadFile = File(...),
+    file2: UploadFile = File(None),
+    file3: UploadFile = File(None),
     productName: str = Form(...),
     productDescription: str = Form(...),
     productPrice: str = Form(...)
@@ -99,45 +101,56 @@ async def upload_product(
         if not os.path.exists(upload_dir):
             os.makedirs(upload_dir)
         
-        # Save the uploaded file
-        file_path = os.path.join(upload_dir, file.filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Process all files
+        categories = []
+        files = [file1, file2, file3]
         
-        # Process image with HuggingFace API
-        with open(file_path, "rb") as f:
-            image_data = f.read()
-            response = requests.post(
-                API_URL,
-                headers={"Authorization": f"Bearer {HF_API}"},
-                data=image_data
-            )
-            image_analysis = response.json()
+        for file in files:
+            if file:
+                print("Received files")
+                # Save the uploaded file
+                file_path = os.path.join(upload_dir, file.filename)
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+                    
+                # Process image with HuggingFace API
+                with open(file_path, "rb") as f:
+                    image_data = (f.read())
+                    response = requests.post(
+                        API_URL,
+                        headers={"Authorization": f"Bearer {HF_API}"},
+                        data=image_data
+                    )
+                    print(response.json())
+                    for responses in response.json():
+                        category = responses['label']
+                        categories.append(category)
+        print(str(categories))
         
-        # Create product metadata
-        metadata = {
-            "productName": productName,
-            "productDescription": productDescription,
-            "productPrice": productPrice,
-            "imageAnalysis": image_analysis
-        }
+        # # Create product metadata
+        # metadata = {
+        #     "productName": productName,
+        #     "productDescription": productDescription,
+        #     "productPrice": productPrice,
+        #     "categories": str(categories)
+        # }
 
-        # Generate embeddings and store in Pinecone
-        id = str(uuid.uuid4())
-        combined_string = f"{productName} {productDescription} {productPrice}"
-        vector = model.encode(combined_string).tolist()
+        # # Generate embeddings and store in Pinecone
+        # id = str(uuid.uuid4())
+        # combined_string = f"{productName} {productDescription} {productPrice}"
+        # vector = model.encode(combined_string).tolist()
 
-        index.upsert(vectors=[{
-            "id": id,
-            "values": vector,
-            "metadata": metadata
-        }])
+        # index.upsert(vectors=[{
+        #     "id": id,
+        #     "values": vector,
+        #     "metadata": metadata
+        # }])
 
         return {"message": "Product uploaded successfully", "metadata": metadata}
 
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail=str(e))
-
 
 if __name__ == '__main__':
     import uvicorn
