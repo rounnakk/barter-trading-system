@@ -10,3 +10,5 @@ uvicorn==0.30.3
 psycopg2==2.9.9
 python-dotenv==0.19.1
 huggingface_hub==0.24.0
+pymongo==4.11.3
+cloudinary==1.43.0

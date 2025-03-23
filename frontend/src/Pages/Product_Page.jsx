@@ -10,7 +10,7 @@ const MOCK_RELATED_PRODUCTS = Array.from({ length: 12 }, (_, i) => ({
   image: `https://picsum.photos/300/300?random=${i}`
 }));
 
-const ProductPage = () => {
+const ProductPage2 = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const images = [
     "https://picsum.photos/600/600?random=1",
@@ -167,4 +167,4 @@ const ProductPage = () => {
   );
 };
 
-export default ProductPage;
+export default ProductPage2;
