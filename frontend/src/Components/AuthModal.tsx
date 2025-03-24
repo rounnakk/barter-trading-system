@@ -1,19 +1,21 @@
 import { useState } from 'react'
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 // Update these imports
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog.tsx'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs.tsx'
 import { LoginForm } from './Auth/LoginForm.tsx'
 import { SignUpForm } from './Auth/SignUpForm.tsx'
 import { Button } from './ui/button.tsx'
-import { User, LogOut } from 'lucide-react'
+import { User, LogOut, UserCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.tsx'
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.tsx'
 
 export function AuthModal() {
   const [open, setOpen] = useState(false)
-  const { user, signOut } = useAuth()
+  const { user, logout } = useAuth(); // Use logout instead of signOut
+  const navigate = useNavigate()
   
   // Get user's display name - prioritize name from metadata (Google auth),
   // then fall back to user's email before the @ symbol
@@ -23,6 +25,10 @@ export function AuthModal() {
   // Get user's avatar - from Google auth metadata or use first letter of name as fallback
   const avatarUrl = user?.user_metadata?.avatar_url || null;
   const avatarInitial = displayName ? displayName[0].toUpperCase() : 'U';
+  
+  const handleViewProfile = () => {
+    navigate('/profile');
+  }
   
   if (user) {
     return (
@@ -36,7 +42,7 @@ export function AuthModal() {
             <span className="text-sm font-medium hidden sm:inline-block">{displayName}</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-48 p-2">
+        <PopoverContent className="w-56 p-2">
           <div className="space-y-4">
             <div className="flex flex-col items-center gap-2 py-2">
               <Avatar className="h-16 w-16">
@@ -48,12 +54,24 @@ export function AuthModal() {
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
             </div>
-            <div className="flex flex-col space-y-1">
+            
+            {/* Add these buttons */}
+            <div className="flex flex-col space-y-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full justify-start gap-2"
+                onClick={handleViewProfile}
+              >
+                <UserCircle className="h-4 w-4" />
+                View Profile
+              </Button>
+              
               <Button 
                 variant="destructive" 
                 size="sm" 
                 className="w-full justify-start gap-2"
-                onClick={signOut}
+                onClick={logout} // Changed from signOut to logout
               >
                 <LogOut className="h-4 w-4" />
                 Sign Out

@@ -24,6 +24,9 @@ from fastapi import FastAPI, HTTPException, Query, Path
 from typing import Optional
 from bson.objectid import ObjectId
 from pydantic import BaseModel
+from fastapi import Body, Depends
+from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, List
 
 
 load_dotenv()
@@ -36,8 +39,26 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 mongo_client = MongoClient(MONGODB_URI)
 db = mongo_client['Cluster0']  # database name
 products_collection = db["products"]
+users_collection = db["users"]
+users_collection.create_index([("id", 1)], unique=True)
+
 
 products_collection.create_index([("location", GEOSPHERE)])
+
+class UserCreate(BaseModel):
+    id: str
+    email: str
+    name: str
+    avatar: Optional[str] = ""
+    created_at: Optional[str] = None
+    
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    avatar: Optional[str] = None
+    bio: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+
 
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -668,6 +689,190 @@ async def get_popular_products(limit: int = 10):
         # Return empty list as last resort
         return []
 
+
+@app.post("/users/create")
+async def create_user(user: UserCreate):
+    """Create a new user in MongoDB based on Supabase auth data"""
+    try:
+        # Check if user exists first
+        existing_user = users_collection.find_one({"id": user.id})
+        if existing_user:
+            # Update the existing user instead of creating new
+            users_collection.update_one(
+                {"id": user.id},
+                {"$set": {
+                    "email": user.email,
+                    "name": user.name,
+                    "avatar": user.avatar,
+                    "updated_at": datetime.utcnow()
+                }}
+            )
+            # Get updated user
+            updated_user = users_collection.find_one({"id": user.id})
+            if updated_user:
+                updated_user["_id"] = str(updated_user["_id"])
+            return updated_user
+        
+        # Initialize user data
+        new_user = {
+            "id": user.id,
+            "email": user.email, 
+            "name": user.name,
+            "avatar": user.avatar,
+            "verified": False,
+            "created_at": user.created_at or datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow(),
+            "statistics": {
+                "total_trades": 0,
+                "successful_trades": 0,
+                "items_listed": 0
+            }
+        }
+        
+        # Insert the user
+        result = users_collection.insert_one(new_user)
+        
+        # Get the created user
+        created_user = users_collection.find_one({"_id": result.inserted_id})
+        if created_user:
+            created_user["_id"] = str(created_user["_id"])
+            
+        return created_user
+        
+    except Exception as e:
+        print(f"Error creating user: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating user: {str(e)}")
+
+@app.get("/users/{user_id}")
+async def get_user_profile(user_id: str):
+    """Get a user's profile data"""
+    try:
+        # Find the user in the database
+        user = users_collection.find_one({"id": user_id})
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Convert ObjectId to string for JSON serialization
+        if "_id" in user:
+            user["_id"] = str(user["_id"])
+            
+        # Update statistics if needed
+        user = update_user_statistics(user)
+            
+        # Remove sensitive fields
+        if "password" in user:
+            del user["password"]
+        if "token" in user:
+            del user["token"]
+            
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching user profile: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user profile: {str(e)}")
+
+def update_user_statistics(user):
+    """Update user statistics based on their activity"""
+    try:
+        user_id = user["id"]
+        
+        # Count user's products
+        products_count = products_collection.count_documents({"user.id": user_id})
+        
+        # Add calculated statistics
+        user["statistics"] = {
+            "items_listed": products_count,
+            "total_trades": user.get("statistics", {}).get("total_trades", 0),
+            "successful_trades": user.get("statistics", {}).get("successful_trades", 0)
+        }
+        
+        # Save updated statistics back to database
+        users_collection.update_one(
+            {"id": user_id},
+            {"$set": {"statistics": user["statistics"]}}
+        )
+        
+        return user
+    except Exception as e:
+        print(f"Error updating user statistics: {str(e)}")
+        return user  # Return the original user if we can't update stats
+
+@app.get("/users/{user_id}/products")
+async def get_user_products(
+    user_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100)
+):
+    """Get products listed by a user"""
+    try:
+        products = list(products_collection.find(
+            {"user.id": user_id}
+        ).sort("created_at", -1).skip(skip).limit(limit))
+        
+        # Convert ObjectId to string
+        for product in products:
+            if "_id" in product:
+                product["_id"] = str(product["_id"])
+                
+        return products
+        
+    except Exception as e:
+        print(f"Error fetching user products: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user products: {str(e)}")
+
+@app.get("/users/{user_id}/trades")
+async def get_user_trades(
+    user_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=50)
+):
+    """Get a user's trade history"""
+    try:
+        # For now, return an empty array as trades might not be implemented yet
+        return []
+        
+    except Exception as e:
+        print(f"Error fetching user trades: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching user trades: {str(e)}")
+
+@app.put("/users/{user_id}")
+async def update_user(user_id: str, update_data: UserUpdate):
+    """Update user profile information"""
+    try:
+        # Check if the user exists
+        existing_user = users_collection.find_one({"id": user_id})
+        if not existing_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Create update object with only non-None fields
+        update_fields = {k: v for k, v in update_data.dict().items() if v is not None}
+        if not update_fields:
+            return {"message": "No fields to update"}
+        
+        # Add updated_at timestamp
+        update_fields["updated_at"] = datetime.utcnow()
+        
+        # Update the user
+        users_collection.update_one(
+            {"id": user_id},
+            {"$set": update_fields}
+        )
+        
+        # Get and return the updated user
+        updated_user = users_collection.find_one({"id": user_id})
+        if updated_user:
+            updated_user["_id"] = str(updated_user["_id"])
+        
+        return updated_user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating user: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating user: {str(e)}")
 
 
 if __name__ == '__main__':
