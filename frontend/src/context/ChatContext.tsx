@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext.tsx';
 import { toast } from 'sonner';
 
@@ -99,7 +99,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     if (currentRoom) {
       fetchMessages(currentRoom.id);
       // Poll for new messages every 5 seconds when in a room
-      const interval = setInterval(() => fetchMessages(currentRoom.id), 5000);
+      const interval = setInterval(() => fetchMessages(currentRoom.id), 10000);
       return () => clearInterval(interval);
     }
   }, [currentRoom]);
@@ -146,29 +146,40 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Fetch messages for a specific chat room
-  const fetchMessages = async (roomId: string) => {
-    setLoadingMessages(true);
-    try {
-      const response = await fetch(`${API_URL}/chat/messages/${roomId}`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch messages: ${response.status}`);
-      }
-      
-      const messageData = await response.json();
-      setMessages(messageData || []);
-      
-      // Mark messages as read when fetched
-      await markAsRead(roomId);
-      
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-      toast.error("Failed to load messages");
-    } finally {
-      setLoadingMessages(false);
+  const isFetchingMessages = useRef(false);
+
+// Fetch messages for a specific chat room
+const fetchMessages = async (roomId: string) => {
+  // Don't fetch if already fetching
+  if (isFetchingMessages.current) return;
+  
+  isFetchingMessages.current = true;
+  setLoadingMessages(true);
+  
+  try {
+    const response = await fetch(`${API_URL}/chat/messages/${roomId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch messages: ${response.status}`);
     }
-  };
+    
+    const messageData = await response.json();
+    setMessages(messageData || []);
+    
+    // Mark messages as read when fetched
+    await markAsRead(roomId);
+    
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    toast.error("Failed to load messages");
+  } finally {
+    setLoadingMessages(false);
+    // Allow next fetch after a short delay
+    setTimeout(() => {
+      isFetchingMessages.current = false;
+    }, 1000);
+  }
+};
 
   // Send a new message
   const sendMessage = async (roomId: string, message: string): Promise<boolean> => {
@@ -207,17 +218,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Mark messages as read
+ // Add a flag to prevent redundant calls
+let isMarkingRead = false;
+
+// Mark messages as read with debounce
 const markAsRead = async (roomId: string) => {
-  if (!user) return;
+  if (!user || isMarkingRead) return;
   
+  isMarkingRead = true;
   try {
     const response = await fetch(`${API_URL}/chat/read/${roomId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ room_id: roomId, user_id: user.id })  // Make sure to send as a JSON object
+      body: JSON.stringify({ user_id: user.id })
     });
     
     if (!response.ok) {
@@ -229,6 +244,11 @@ const markAsRead = async (roomId: string) => {
     
   } catch (error) {
     console.error("Error marking messages as read:", error);
+  } finally {
+    // Reset flag after delay to prevent rapid refires
+    setTimeout(() => {
+      isMarkingRead = false;
+    }, 2000);
   }
 };
 
