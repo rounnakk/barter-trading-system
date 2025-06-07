@@ -10,7 +10,7 @@ import { Toaster } from 'sonner';
 import { format } from 'date-fns';
 import { Send, User, ArrowLeft, Loader2, MessageSquare } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../../Components/ui/avatar.tsx';
-import { cn } from '../../lib/utils.tsx';
+import { cn } from '../../lib/utils.ts';
 
 const ChatPage = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -93,7 +93,7 @@ const ChatPage = () => {
     return {
       id: partner?.id || '',
       name: partner?.name || 'User',
-      avatar: partner?.avatar_url || '',
+      avatar: partner?.avatar || '',
     };
   };
 
