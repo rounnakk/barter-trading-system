@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from fastapi import Body, Depends
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
+import donation_service
 
 
 load_dotenv()
@@ -83,6 +84,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Import donation_service after initializing the app and database
+import donation_service
+
+# Initialize donation_service module with your database
+donation_service.setup_collection(db)
+
+# Include the donation_service router in your app
+app.include_router(donation_service.router)
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
@@ -322,29 +332,37 @@ async def get_nearby_products(
 
 @app.get("/products")
 async def get_products(
-    skip: int = 0, 
-    limit: int = 20, 
+    skip: int = Query(0, ge=0), 
+    limit: int = Query(20, ge=1, le=100), 
     category: Optional[str] = None,
     search: Optional[str] = None
 ):
     try:
         query = {}
         
-        # Filter by category if provided
-        if category:
-            query["categories"] = category
+        # Add debugging
+        print(f"Category filter: {category}")
+        print(f"Search term: {search}")
+        
+        # Filter by category if provided and not 'All'
+        if category and category.lower() != 'all':
+            # Check if the category field exists
+            query["categories"] = {"$regex": category, "$options": "i"}
+            # Alternative approach: check if category is in the array
+            # query["categories"] = {"$in": [category]}
             
         # Text search if provided
         if search:
-            # If you need full-text search, create a text index first:
-            # products_collection.create_index([("name", "text"), ("description", "text")])
             query["$or"] = [
                 {"name": {"$regex": search, "$options": "i"}},
                 {"description": {"$regex": search, "$options": "i"}}
             ]
+        
+        print(f"MongoDB query: {query}")
             
         # Get products
         products = list(products_collection.find(query).sort("created_at", -1).skip(skip).limit(limit))
+        print(f"Found {len(products)} products matching query")
         
         # Convert ObjectId to string for JSON serialization
         for product in products:
@@ -873,6 +891,14 @@ async def update_user(user_id: str, update_data: UserUpdate):
     except Exception as e:
         print(f"Error updating user: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error updating user: {str(e)}")
+
+
+# In your main FastAPI application code, after database initialization
+# Set up the donation collection
+donation_service.setup_collection(db)
+
+# Include the donation router
+app.include_router(donation_service.router)
 
 
 if __name__ == '__main__':

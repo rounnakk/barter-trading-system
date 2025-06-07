@@ -4,6 +4,8 @@ import { Button } from "./ui/button.tsx"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog.tsx"
 import { Camera, Upload } from "lucide-react"
 
+const API_URL = 'https://bartrade.koyeb.app'
+
 export function ImageSearchModal() {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string>("")
@@ -26,7 +28,7 @@ export function ImageSearchModal() {
     formData.append('file', file)
 
     try {
-      const response = await fetch("http://localhost:8000/search_by_image", {
+      const response = await fetch(`${API_URL}/search_by_image`, {
         method: "POST",
         body: formData,
       })

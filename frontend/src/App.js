@@ -4,6 +4,7 @@ import ProductPage from './Pages/Product/Product_Page.tsx';
 import UserProfile from './Pages/UserProfile/UserProfile.tsx';
 import { AuthProvider } from './context/AuthContext.tsx';
 import { Toaster } from 'sonner';
+import DonatedProducts from './Pages/Donation/DonatedProducts.js';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/product/:id" element={<ProductPage />} />
           <Route path="/user/:id" element={<UserProfile />} />
           <Route path="/profile" element={<UserProfile />} /> {/* Current user's profile */}
+          <Route path='/donation' element={<DonatedProducts />}/>
         </Routes>
       </Router>
     </AuthProvider>

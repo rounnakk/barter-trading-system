@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { forwardRef, useEffect } from 'react'
 import { useState } from "react"
 import { Button } from "./ui/button.tsx"
 import { Input } from "./ui/input.tsx"
@@ -11,6 +11,8 @@ import { useAuth } from '../context/AuthContext.tsx'
 import { LoginForm } from './Auth/LoginForm.tsx'
 import { SignUpForm } from './Auth/SignUpForm.tsx'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs.tsx'
+
+const API_URL = 'https://bartrade.koyeb.app'
 
 interface LocationState {
   latitude: number | null;
@@ -31,7 +33,14 @@ const ALL_CATEGORIES = [
   'other'
 ];
 
-export function ProductUploadModal() {
+// Add interface for component props
+interface ProductUploadModalProps {
+  asChild?: boolean;
+  children?: React.ReactNode;
+}
+
+export const ProductUploadModal = forwardRef<HTMLButtonElement, ProductUploadModalProps>(
+    ({ asChild, children }, ref) => {
   const [files, setFiles] = useState<{
     image1: File | null,
     image2: File | null,
@@ -185,7 +194,7 @@ export function ProductUploadModal() {
     formData.append('productDescription', productDescription)
   
     try {
-      const response = await fetch("https://bartrade.koyeb.app/predict_categories", {
+      const response = await fetch(`${API_URL}/predict_categories`, {
           method: "POST",
           body: formData,
       })
@@ -601,7 +610,7 @@ export function ProductUploadModal() {
     try {
       console.log("🌐 Sending request to backend...")
       // Use the production URL when ready
-      const response = await fetch("http://localhost:8000/upload_product", {
+      const response = await fetch(`${API_URL}/upload_product`, {
         method: "POST",
         body: formData,
       })
@@ -693,4 +702,4 @@ export function ProductUploadModal() {
       </DialogContent>
     </Dialog>
   )
-}
+})

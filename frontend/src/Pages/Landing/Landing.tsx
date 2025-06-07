@@ -7,14 +7,15 @@ import { Camera, MapPin, Menu, Plus, Search, User, Loader2 } from "lucide-react"
 import { ProductUploadModal } from '../../Components/ProductUploadModal.tsx'
 import { ImageSearchModal } from '../../Components/ImageSearchModal.tsx'
 import { Toaster } from 'sonner';
-import { Smartphone, Sofa, Shirt, BookOpen, Car, Dumbbell, Package, Flower2 } from "lucide-react"
+import { Smartphone, Sofa, Shirt, BookOpen, Car, Dumbbell, Package, Flower2, Layers } from "lucide-react"
 import { AuthModal } from '../../Components/AuthModal.tsx'
 import { Link } from "react-router-dom"
 import { Github, Twitter, Instagram, Facebook, ArrowRight, Heart, Mail, Phone } from "lucide-react"
 import { useAuth } from '../../context/AuthContext.tsx'
 
 
-const API_URL = "http://localhost:8000";
+// const API_URL = "http://localhost:8000";
+const API_URL = "https://bartrade.koyeb.app";
 
 interface Product {
   id: string;
@@ -33,6 +34,7 @@ interface Product {
 }
 
 const categories = [
+  { name: "All", icon: Layers, color: "bg-blue-100" },
   { name: "Electronics", icon: Smartphone, color: "bg-blue-100" },
   { name: "Furniture", icon: Sofa, color: "bg-amber-100" },
   { name: "Clothing", icon: Shirt, color: "bg-pink-100" },
@@ -51,7 +53,7 @@ export default function Home() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(true);
   const [loadingAll, setLoadingAll] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchTerm, setSearchTerm] = useState("");
 
   const { user } = useAuth();
@@ -129,13 +131,14 @@ export default function Home() {
 
   // Update fetchAllProducts to filter out user's own products
   // Update the fetchAllProducts function signature to accept null
+// In your fetchAllProducts function
 const fetchAllProducts = async (category?: string | null, search?: string) => {
   try {
     setLoadingAll(true);
-    let url = `${API_URL}/products?limit=20`; // Get more products to account for filtering
+    let url = `${API_URL}/products?limit=20`;
     
-    // Only add category parameter if it's a non-null string
-    if (category) {
+    // Only add category parameter if it's not null and not "All"
+    if (category && category !== "All") {
       url += `&category=${encodeURIComponent(category)}`;
     }
     
@@ -143,15 +146,20 @@ const fetchAllProducts = async (category?: string | null, search?: string) => {
       url += `&search=${encodeURIComponent(search)}`;
     }
     
+    console.log("Fetching products from URL:", url);
+    
     const response = await fetch(url);
     
     if (response.ok) {
       const data = await response.json();
+      console.log("Products received:", data.length);
       
       // Filter out products uploaded by the current user
       const filteredProducts = user 
         ? data.filter(product => product.user?.id !== user.id)
         : data;
+      
+      console.log("After user filtering:", filteredProducts.length);
       
       // Limit to 12 products after filtering
       setAllProducts(filteredProducts.slice(0, 12));
@@ -166,23 +174,32 @@ const fetchAllProducts = async (category?: string | null, search?: string) => {
 };
 
   // Add a useEffect to refetch products when user changes
-  useEffect(() => {
-    if (coords?.lat && coords?.lng) {
-      fetchNearbyProducts(coords.lat, coords.lng);
-    }
-    fetchAllProducts(selectedCategory, searchTerm);
-  }, [user?.id]); // Refetch when user ID changes
+// Add selectedCategory dependency to this useEffect
+useEffect(() => {
+  if (coords?.lat && coords?.lng) {
+    fetchNearbyProducts(coords.lat, coords.lng);
+  }
+  fetchAllProducts(selectedCategory, searchTerm);
+}, [user?.id, selectedCategory, searchTerm]); // Add selectedCategory and searchTerm as dependencies // Refetch when user ID changes
 
-  // Handle category selection
-  const handleCategoryClick = (categoryName: string) => {
-    if (selectedCategory === categoryName) {
-      setSelectedCategory(null);
-      fetchAllProducts();
-    } else {
-      setSelectedCategory(categoryName);
-      fetchAllProducts(categoryName, searchTerm);
-    }
-  };
+const handleCategoryClick = (categoryName: string) => {
+  // If "All" is clicked, reset category filter
+  if (categoryName === "All") {
+    setSelectedCategory("All");
+    fetchAllProducts(null, searchTerm);
+    return;
+  }
+  
+  // If the current selection is clicked again, select "All"
+  if (selectedCategory === categoryName) {
+    setSelectedCategory("All");
+    fetchAllProducts(null, searchTerm);
+  } else {
+    // Otherwise set the new category and fetch filtered products
+    setSelectedCategory(categoryName);
+    fetchAllProducts(categoryName, searchTerm);
+  }
+};
 
   // Handle search input
   const handleSearch = (event: React.FormEvent) => {

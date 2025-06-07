@@ -1,357 +1,250 @@
-import React, { useState } from 'react';
-import { Search, MapPin, Filter, ShoppingBag, Heart, ChevronLeft, ChevronRight, X, MessageCircle, Flag } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, MapPin, Filter, ShoppingBag, Heart, ChevronLeft, ChevronRight, Gift } from 'lucide-react';
+import DonatedProductModal from './DonatedProductModal';
+import DonationUploadModal from './DonationUploadModal';
 
-// Modal component inline to avoid import issues
-const DonatedProductModal = ({ product, isOpen, onClose }) => {
-  if (!isOpen || !product) return null;
+const API_URL = 'https://bartrade.koyeb.app'
 
-  const stopPropagation = (e) => {
-    e.stopPropagation();
+// Mock useAuth hook to avoid dependency issues
+const useAuth = () => {
+  return {
+    user: {
+      id: "mock-user-123",
+      name: "Mock User",
+      email: "user@example.com",
+      avatar: "https://ui-avatars.com/api/?name=Mock+User&background=0D8ABC&color=fff"
+    },
+    isAuthenticated: true,
+    login: () => {},
+    logout: () => {}
   };
-
-  return (
-    <div 
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row"
-        onClick={stopPropagation}
-      >
-        {/* Close button */}
-        <button 
-          onClick={onClose}
-          className="absolute top-4 right-4 bg-white/80 rounded-full h-8 w-8 flex items-center justify-center hover:bg-gray-100 z-10"
-        >
-          <X className="h-5 w-5" />
-        </button>
-        
-        {/* Left side - Image */}
-        <div className="md:w-1/2 h-64 md:h-auto relative">
-          <img 
-            src={product.image} 
-            alt={product.name} 
-            className="w-full h-full object-cover"
-          />
-        </div>
-        
-        {/* Right side - Product Details */}
-        <div className="md:w-1/2 p-6 overflow-y-auto">
-          <h2 className="text-xl font-bold mb-2">{product.name}</h2>
-          
-          <div className="flex items-center gap-1 text-sm text-gray-500 mb-4">
-            <MapPin className="h-4 w-4" />
-            <span>{product.location}</span>
-            <span className="mx-1">•</span>
-            <span>{product.listed}</span>
-          </div>
-          
-          <div className="bg-gray-50 p-3 rounded-lg mb-4">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
-              <p className="font-medium">{product.donor}</p>
-            </div>
-            <p className="text-sm text-gray-500">Donated by</p>
-          </div>
-          
-          <div className="mb-6">
-            <h3 className="font-medium mb-2">Description</h3>
-            <p className="text-gray-600 text-sm">{product.description}</p>
-          </div>
-          
-          <div className="mb-6">
-            <h3 className="font-medium mb-2">Category</h3>
-            <div className="inline-block bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded-full">
-              {product.category}
-            </div>
-          </div>
-          
-          <div className="space-y-3">
-            <button className="w-full bg-green-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-green-700 transition-colors">
-              Claim This Donation
-            </button>
-            <button className="w-full bg-blue-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors">
-              <MessageCircle className="h-5 w-5" />
-              Message Donor
-            </button>
-            <button className="w-full text-gray-500 text-sm py-2 hover:underline flex items-center justify-center gap-1">
-              <Flag className="h-4 w-4" />
-              Report this item
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 };
 
 const DonatedProducts = () => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
+  const { user } = useAuth();
   
-  // Mock data - replace with API call later
-  const donatedProducts = [
-    {
-      id: 1,
-      name: 'Economics Textbook',
-      description: 'College textbook, excellent condition with minimal highlighting',
-      image: 'https://picsum.photos/seed/book1/300/300',
-      category: 'Books',
-      donor: 'Rahul M.',
-      location: 'Mumbai',
-      listed: '2 days ago',
-    },
-    {
-      id: 2,
-      name: 'Men\'s Running Shoes',
-      description: 'Size 9, gently used Nike running shoes',
-      image: 'https://picsum.photos/seed/shoes1/300/300',
-      category: 'Clothing',
-      donor: 'Anita K.',
-      location: 'Delhi',
-      listed: '5 days ago',
-    },
-    {
-      id: 3,
-      name: 'Microwave Oven',
-      description: 'Working condition, 800W microwave',
-      image: 'https://picsum.photos/seed/microwave1/300/300',
-      category: 'Appliances',
-      donor: 'Vijay S.',
-      location: 'Pune',
-      listed: '1 week ago',
-    },
-    {
-      id: 4,
-      name: 'Children\'s Toys Bundle',
-      description: 'Assorted toys for ages 3-5, in good condition',
-      image: 'https://picsum.photos/seed/toys1/300/300',
-      category: 'Kids',
-      donor: 'Priya R.',
-      location: 'Bangalore',
-      listed: '3 days ago',
-    },
-    {
-      id: 5,
-      name: 'Coffee Table',
-      description: 'Wooden coffee table, some scratches but sturdy',
-      image: 'https://picsum.photos/seed/table1/300/300',
-      category: 'Furniture',
-      donor: 'Kiran D.',
-      location: 'Chennai',
-      listed: '1 day ago',
-    },
-    {
-      id: 6,
-      name: 'Samsung Galaxy S9',
-      description: 'Used phone, working condition with minor screen scratches',
-      image: 'https://picsum.photos/seed/phone1/300/300',
-      category: 'Electronics',
-      donor: 'Amit P.',
-      location: 'Hyderabad',
-      listed: '4 days ago',
-    },
-    {
-      id: 7,
-      name: 'Rice Cooker',
-      description: '3-cup rice cooker, perfect working condition',
-      image: 'https://picsum.photos/seed/cooker1/300/300',
-      category: 'Appliances',
-      donor: 'Neha T.',
-      location: 'Kolkata',
-      listed: '2 weeks ago',
-    },
-    {
-      id: 8,
-      name: 'Yoga Mat',
-      description: 'Lightly used yoga mat, clean and sanitized',
-      image: 'https://picsum.photos/seed/yoga1/300/300',
-      category: 'Sports',
-      donor: 'Deepak M.',
-      location: 'Pune',
-      listed: '6 days ago',
-    },
-  ];
-
-  const categories = ['All', 'Electronics', 'Clothing', 'Books', 'Furniture', 'Appliances', 'Kids', 'Sports'];
+  // State for products and loading
+  const [donatedProducts, setDonatedProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
-  const filteredProducts = activeCategory === 'All' 
-    ? donatedProducts 
-    : donatedProducts.filter(product => product.category === activeCategory);
+  // Fetch products from backend
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        const categoryParam = activeCategory !== 'All' ? `?category=${activeCategory}` : '';
+        const response = await fetch(`${API_URL}/donations${categoryParam}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch donations');
+        }
+        
+        const data = await response.json();
+        setDonatedProducts(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching donations:', err);
+        setError('Failed to load donations. Please try again later.');
+        // Keep existing products if fetch fails
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchProducts();
+  }, [activeCategory, isDonateModalOpen]); // Refresh when category changes or after donation
   
-  const openProductModal = (product) => {
+  // Open product details modal
+  const openModal = (product) => {
     setSelectedProduct(product);
     setIsModalOpen(true);
   };
 
-  const closeProductModal = () => {
+  // Close product details modal
+  const closeModal = () => {
     setIsModalOpen(false);
+    setSelectedProduct(null);
   };
+
+  // Open donation modal
+  const openDonateModal = () => {
+    setIsDonateModalOpen(true);
+  };
+
+  // Close donation modal
+  const closeDonateModal = () => {
+    setIsDonateModalOpen(false);
+  };
+
+  // Categories array with icons
+  const categories = [
+    { name: 'All', active: activeCategory === 'All' },
+    { name: 'Electronics', active: activeCategory === 'Electronics' },
+    { name: 'Furniture', active: activeCategory === 'Furniture' },
+    { name: 'Clothing', active: activeCategory === 'Clothing' },
+    { name: 'Books', active: activeCategory === 'Books' },
+    { name: 'Toys', active: activeCategory === 'Toys' },
+    { name: 'Kitchenware', active: activeCategory === 'Kitchenware' },
+    { name: 'Appliances', active: activeCategory === 'Appliances' },
+    { name: 'Sports', active: activeCategory === 'Sports' },
+    { name: 'Other', active: activeCategory === 'Other' },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Header with donate button */}
       <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-sm">
         <div className="container flex h-14 items-center justify-between px-4">
           <div className='h-9 w-9 overflow-hidden rounded-3xl'>
             <img className='filter invert' src='/bt.png' alt="BarTrade Logo" />
           </div>
-          <button className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-gray-100 text-gray-700">
-            <ShoppingBag className="h-5 w-5" />
-          </button>
+          {/* Added donate button in navbar */}
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={openDonateModal}
+              className="inline-flex items-center justify-center h-10 px-4 py-2 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm"
+            >
+              <Gift className="h-4 w-4 mr-2" />
+              Donate
+            </button>
+            <button className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-gray-100 text-gray-700">
+              <ShoppingBag className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
-
-      <div className="container px-4 py-8">
-        {/* Banner */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-lg mb-8">
-          <h1 className="text-2xl font-bold mb-2">Donation Corner</h1>
-          <p className="opacity-90">Browse items donated by our community or donate your own items to someone in need</p>
+      
+      <div className="container mx-auto px-4 py-8">
+        {/* Top section with title and donate button */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Donated Items</h1>
+          <button 
+            onClick={openDonateModal}
+            className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition-colors"
+          >
+            <Gift className="h-5 w-5" />
+            Donate an Item
+          </button>
         </div>
         
-        {/* Search and Filter */}
-        <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 mb-8">
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <input 
-              placeholder="Search donated items" 
-              className="flex h-10 w-full rounded-md border border-gray-300 bg-background px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 pl-8" 
-            />
-          </div>
-          <div className="flex space-x-2">
-            <button className="inline-flex items-center justify-center gap-2 h-10 py-2 px-4 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700">
-              <MapPin className="h-4 w-4" />
-              <span>Location</span>
-            </button>
-            <button className="inline-flex items-center justify-center gap-2 h-10 py-2 px-4 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700">
-              <Filter className="h-4 w-4" />
-              <span>Filter</span>
-            </button>
-          </div>
+        {/* Search input */}
+        <div className="relative mb-6">
+          <input
+            type="text"
+            placeholder="Search for items..."
+            className="w-full p-3 pl-12 rounded-lg border border-gray-300 shadow-sm"
+          />
+          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
         </div>
         
-        {/* Category Pills */}
-        <div className="mb-8 overflow-x-auto scrollbar-hide">
-          <div className="flex space-x-2 pb-2">
+        {/* Categories */}
+        <div className="mb-8 overflow-x-auto">
+          <div className="flex space-x-2 py-2">
             {categories.map(category => (
               <button
-                key={category}
-                className={`rounded-full h-10 py-2 px-4 ${
-                  activeCategory === category 
-                    ? "bg-blue-600 text-white hover:bg-blue-700" 
-                    : "border border-gray-300 bg-white hover:bg-gray-50 text-gray-700"
+                key={category.name}
+                className={`whitespace-nowrap px-4 py-2 rounded-full ${
+                  category.active 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
                 }`}
-                onClick={() => setActiveCategory(category)}
+                onClick={() => setActiveCategory(category.name)}
               >
-                {category}
+                {category.name}
               </button>
             ))}
           </div>
         </div>
-
-        {/* Donation CTA */}
-        <div className="bg-blue-50 border border-blue-100 p-6 rounded-lg mb-8 flex flex-col md:flex-row md:items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-blue-800">Have Something to Donate?</h2>
-            <p className="text-blue-700 mt-1">Your unused items could help someone in need</p>
+        
+        {/* Loading state */}
+        {loading && (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
           </div>
-          <button className="mt-4 md:mt-0 bg-blue-600 hover:bg-blue-700 inline-flex items-center justify-center h-10 py-2 px-4 rounded-md text-white">
-            Donate an Item
-          </button>
-        </div>
-
-        {/* Products Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {filteredProducts.map(product => (
-            <div 
-              key={product.id} 
-              className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow overflow-hidden cursor-pointer"
-              onClick={() => openProductModal(product)}
-            >
-              <div className="aspect-square relative">
-                <img 
-                  src={product.image} 
-                  alt={product.name}
-                  className="w-full h-full object-cover"
-                />
-                <button 
-                  className="absolute top-2 right-2 bg-white/80 rounded-full h-8 w-8 p-1.5 hover:bg-white"
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent card click
-                    // Handle wishlist/favorite
-                  }}
-                >
-                  <Heart className="h-full w-full" />
-                </button>
-              </div>
-              <div className="p-4">
-                <h3 className="font-medium text-lg mb-1">{product.name}</h3>
-                <p className="text-sm text-gray-500 mb-2 line-clamp-2">{product.description}</p>
-                <div className="flex items-center text-xs text-gray-500 mt-3">
-                  <div className="flex items-center">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    {product.location}
-                  </div>
-                  <span className="mx-2">•</span>
-                  <span>{product.listed}</span>
+        )}
+        
+        {/* Error state */}
+        {error && (
+          <div className="bg-red-50 text-red-600 p-4 rounded-md mb-6">
+            {error}
+          </div>
+        )}
+        
+        {/* Products grid */}
+        {!loading && donatedProducts.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {donatedProducts.map(product => (
+              <div 
+                key={product.id} 
+                className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => openModal(product)}
+              >
+                <div className="h-48 overflow-hidden">
+                  <img 
+                    src={product.images && product.images.length > 0 ? product.images[0] : 'https://via.placeholder.com/300x200?text=No+Image'} 
+                    alt={product.name} 
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                  <div className="text-sm">
-                    <span className="text-gray-500">Donated by</span>
-                    <span className="font-medium ml-1">{product.donor}</span>
+                <div className="p-4">
+                  <h3 className="font-semibold text-lg mb-1">{product.name}</h3>
+                  <div className="flex items-center text-sm text-gray-500 mb-2">
+                    <MapPin className="h-3.5 w-3.5 mr-1" />
+                    <span>{product.location ? 'Near you' : 'Location unknown'}</span>
+                    <span className="mx-1">•</span>
+                    <span>{new Date(product.created_at).toLocaleDateString()}</span>
                   </div>
-                  <button 
-                    className="h-8 px-3 rounded text-sm bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center"
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent card click
-                      openProductModal(product);
-                    }}
-                  >
-                    View
-                  </button>
+                  <div className="flex items-center text-xs">
+                    <div className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                      {product.categories && product.categories.length > 0 ? product.categories[0] : 'Uncategorized'}
+                    </div>
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
+        
+        {/* Empty state */}
+        {!loading && donatedProducts.length === 0 && (
+          <div className="text-center py-12">
+            <div className="bg-gray-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto mb-4">
+              <Gift className="h-10 w-10 text-gray-400" />
             </div>
-          ))}
-        </div>
-
-        {/* Pagination */}
-        <div className="flex justify-center mt-8 space-x-2">
-          <button className="h-10 w-10 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 inline-flex items-center justify-center">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button className="h-10 w-10 rounded-md border border-gray-300 bg-blue-50 text-gray-700 inline-flex items-center justify-center">
-            1
-          </button>
-          <button className="h-10 w-10 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 inline-flex items-center justify-center">
-            2
-          </button>
-          <button className="h-10 w-10 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 inline-flex items-center justify-center">
-            3
-          </button>
-          <button className="h-10 w-10 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 inline-flex items-center justify-center">
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Product Modal */}
-      <DonatedProductModal 
-        product={selectedProduct}
-        isOpen={isModalOpen}
-        onClose={closeProductModal}
-      />
-
-      {/* Footer */}
-      <footer className="bg-white border-t mt-16 py-8">
-        <div className="container px-4">
-          <div className="text-center text-gray-500 text-sm">
-            <p>BarTrade Donation Corner - Giving back to the community</p>
-            <p className="mt-2">© 2025 BarTrade. All rights reserved.</p>
+            <h3 className="text-xl font-medium mb-2">No donations available</h3>
+            <p className="text-gray-500 mb-6 max-w-md mx-auto">
+              {activeCategory !== 'All' 
+                ? `There are no donations in the ${activeCategory} category yet.` 
+                : 'There are no donations available at the moment.'}
+            </p>
+            <button 
+              onClick={openDonateModal}
+              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+            >
+              Donate an Item
+            </button>
           </div>
-        </div>
-      </footer>
+        )}
+      </div>
+      
+      {/* Product details modal */}
+      <DonatedProductModal 
+        product={selectedProduct} 
+        isOpen={isModalOpen} 
+        onClose={closeModal} 
+      />
+      
+      {/* Donation modal */}
+      <DonationUploadModal 
+        isOpen={isDonateModalOpen} 
+        onClose={closeDonateModal} 
+        currentUser={user}
+      />
     </div>
   );
 };

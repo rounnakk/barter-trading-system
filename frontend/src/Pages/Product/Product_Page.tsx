@@ -11,7 +11,8 @@ import { ImageSearchModal } from '../../Components/ImageSearchModal.tsx';
 import { AuthModal } from '../../Components/AuthModal.tsx';
 import { Github, Twitter, Instagram, Facebook, ArrowRight, Heart, Mail, Phone } from "lucide-react";
 
-const API_URL = "http://localhost:8000";
+// const API_URL = "http://localhost:8000";
+const API_URL = "https://bartrade.koyeb.app";
 
 interface Product {
   id: string;

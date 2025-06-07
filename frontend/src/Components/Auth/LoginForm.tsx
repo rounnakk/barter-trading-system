@@ -7,7 +7,11 @@ import { Loader2 } from 'lucide-react';
 import { Separator } from '../ui/separator.tsx';
 import { toast } from 'sonner';
 
-export function LoginForm() {
+interface LoginFormProps {
+  onSuccess?: () => void;  // Make it optional with ?
+}
+
+export function LoginForm({ onSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
