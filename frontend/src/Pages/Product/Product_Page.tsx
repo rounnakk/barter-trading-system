@@ -198,43 +198,43 @@ const ProductPage = () => {
     }).format(price);
   };
   
-  const handleContactSeller = async () => {
-    if (!user) {
-      toast.error("Please sign in to contact the seller");
-      return;
+ 
+const handleContactSeller = async () => {
+  if (!user) {
+    toast.error("Please sign in to contact the seller");
+    return;
+  }
+  
+  if (!product) {
+    toast.error("Product information not available");
+    return;
+  }
+  
+  if (user.id === product.user.id) {
+    toast.info("This is your own listing");
+    return;
+  }
+  
+  const toastId = toast.loading("Starting chat with seller...");
+  
+  const roomId = await initiateChatWithSeller(
+    product.id,
+    product.user.id,
+    { 
+      name: product.name, 
+      image: product.images[0] || null 
     }
-    
-    if (!product) {
-      toast.error("Product information not available");
-      return;
-    }
-    
-    if (user.id === product.user.id) {
-      toast.info("This is your own listing");
-      return;
-    }
-    
-    
-    toast.loading("Starting chat with seller...");
-    
-    const roomId = await initiateChatWithSeller(
-      product.id,
-      product.user.id,
-      { 
-        name: product.name, 
-        image: product.images[0] || null 
-      }
-    );
-    
-    if (roomId) {
-      toast.dismiss();
-      toast.success("Chat started!");
-      navigate(`/chats/${roomId}`);
-    } else {
-      toast.dismiss();
-      toast.error("Couldn't start chat. Please try again.");
-    }
-  };
+  );
+  
+  if (roomId) {
+    toast.dismiss(toastId);
+    toast.success("Chat started!");
+    navigate(`/chats/${roomId}`);
+  } else {
+    toast.dismiss(toastId);
+    toast.error("Couldn't start chat. Please try again.");
+  }
+};
 
   if (loading) {
     return (
