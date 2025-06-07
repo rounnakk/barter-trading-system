@@ -10,6 +10,7 @@ import { ProductUploadModal } from '../../Components/ProductUploadModal.tsx';
 import { ImageSearchModal } from '../../Components/ImageSearchModal.tsx';
 import { AuthModal } from '../../Components/AuthModal.tsx';
 import { toast } from 'sonner';
+import { Navbar } from '../../Components/Navbar.tsx';
 
 // const API_URL = "http://localhost:8000";
 const API_URL = "https://bartrade.koyeb.app";
@@ -278,36 +279,11 @@ const UserProfile: React.FC = () => {
   return (
     <div className="min-h-screen bg-blue-50">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-sm">
-        <div className="container flex h-14 items-center justify-between px-4">
-          <div className='h-9 w-9 overflow-hidden rounded-3xl'>
-            <Link to="/">
-              <img className='filter invert' src='/bt.png' alt="Barter Trade" />
-            </Link>
-          </div>
-
-          <div className="flex flex-1 items-center justify-center gap-2 px-4">
-            <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search" 
-                className="pl-8" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <Button type="submit" className="sr-only">Search</Button>
-            </form>
-            <ImageSearchModal />
-            <Button variant="outline" className="gap-2">
-              <MapPin className="h-4 w-4" />
-              {user.location || "Location"}
-            </Button>
-            <ProductUploadModal />
-          </div>
-
-          <AuthModal />
-        </div>
-      </header>
+      <Navbar 
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              handleSearch={handleSearch}
+            />
 
       {/* User Profile */}
       <div className="container px-4 py-8">

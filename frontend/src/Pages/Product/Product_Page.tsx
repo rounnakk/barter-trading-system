@@ -1,15 +1,15 @@
 import React from "react";
-import { MapPin, MessageCircle, User, ChevronLeft, ChevronRight, ArrowLeft, Loader2, Search, Menu, Camera, Plus } from "lucide-react";
+import { MapPin, MessageCircle, User, ChevronLeft, ChevronRight, ArrowLeft, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Button } from "../../Components/ui/button.tsx";
 import { Input } from "../../Components/ui/input.tsx";
 import { useAuth } from "../../context/AuthContext.tsx";
 import { toast, Toaster } from "sonner";
-import { ProductUploadModal } from '../../Components/ProductUploadModal.tsx';
-import { ImageSearchModal } from '../../Components/ImageSearchModal.tsx';
-import { AuthModal } from '../../Components/AuthModal.tsx';
 import { Github, Twitter, Instagram, Facebook, ArrowRight, Heart, Mail, Phone } from "lucide-react";
+import { Navbar } from "../../Components/Navbar.tsx";
+import { useChat } from '../../context/ChatContext.tsx';
+
 
 // const API_URL = "http://localhost:8000";
 const API_URL = "https://bartrade.koyeb.app";
@@ -58,7 +58,10 @@ const ProductPage = () => {
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const { user } = useAuth();
+
   const navigate = useNavigate();
+  const { initiateChatWithSeller } = useChat();
+
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -195,15 +198,42 @@ const ProductPage = () => {
     }).format(price);
   };
   
-  const handleContactSeller = () => {
+  const handleContactSeller = async () => {
     if (!user) {
       toast.error("Please sign in to contact the seller");
       return;
     }
     
-    // Here you'd implement chat functionality
-    // For now, let's navigate to a hypothetical chat page
-    navigate(`/chat/${product?.user.id}`);
+    if (!product) {
+      toast.error("Product information not available");
+      return;
+    }
+    
+    if (user.id === product.user.id) {
+      toast.info("This is your own listing");
+      return;
+    }
+    
+    
+    toast.loading("Starting chat with seller...");
+    
+    const roomId = await initiateChatWithSeller(
+      product.id,
+      product.user.id,
+      { 
+        name: product.name, 
+        image: product.images[0] || null 
+      }
+    );
+    
+    if (roomId) {
+      toast.dismiss();
+      toast.success("Chat started!");
+      navigate(`/chats/${roomId}`);
+    } else {
+      toast.dismiss();
+      toast.error("Couldn't start chat. Please try again.");
+    }
   };
 
   if (loading) {
@@ -240,37 +270,11 @@ const ProductPage = () => {
     <div className="min-h-screen bg-blue-50 flex flex-col">
       <Toaster richColors position="top-right" />
       
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-sm">
-        <div className="container flex h-14 items-center justify-between px-4">
-          <div className='h-9 w-9 overflow-hidden rounded-3xl'>
-            <Link to="/">
-              <img className='filter invert' src='/bt.png' alt="Barter Trade" />
-            </Link>
-          </div>
-
-          <div className="flex flex-1 items-center justify-center gap-2 px-4">
-            <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search" 
-                className="pl-8" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <Button type="submit" className="sr-only">Search</Button>
-            </form>
-            <ImageSearchModal />
-            <Button variant="outline" className="gap-2">
-              <MapPin className="h-4 w-4" />
-              {product.address ? product.address.split(',')[0] : "Location"}
-            </Button>
-            <ProductUploadModal />
-          </div>
-
-          <AuthModal />
-        </div>
-      </header>
+      <Navbar 
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              handleSearch={handleSearch}
+            />
 
       {/* Main Content */}
       <main className="flex-grow">

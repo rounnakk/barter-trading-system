@@ -3,7 +3,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 // Update these imports
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog.tsx'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs.tsx'
+import { Tabs, TabsContent } from './ui/tabs.tsx'
 import { LoginForm } from './Auth/LoginForm.tsx'
 import { SignUpForm } from './Auth/SignUpForm.tsx'
 import { Button } from './ui/button.tsx'
@@ -11,9 +11,11 @@ import { User, LogOut, UserCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.tsx'
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover.tsx'
+import { motion } from 'framer-motion'
 
 export function AuthModal() {
   const [open, setOpen] = useState(false)
+  const [authTab, setAuthTab] = useState("login") // Track active tab
   const { user, logout } = useAuth(); // Use logout instead of signOut
   const navigate = useNavigate()
   
@@ -55,7 +57,6 @@ export function AuthModal() {
               </div>
             </div>
             
-            {/* Add these buttons */}
             <div className="flex flex-col space-y-2">
               <Button 
                 variant="outline" 
@@ -71,7 +72,7 @@ export function AuthModal() {
                 variant="destructive" 
                 size="sm" 
                 className="w-full justify-start gap-2"
-                onClick={logout} // Changed from signOut to logout
+                onClick={logout}
               >
                 <LogOut className="h-4 w-4" />
                 Sign Out
@@ -90,51 +91,128 @@ export function AuthModal() {
           <User className="h-5 w-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[80vw] md:max-w-[85vw] lg:max-w-[75vw] xl:max-w-[65vw] 
-                        h-[90vh] max-h-[90vh] p-6 overflow-y-auto">
-        <DialogHeader className="mb-6">
-          <DialogTitle className="text-center text-2xl font-bold">Welcome to Barter Trade</DialogTitle>
-        </DialogHeader>
-        
-        <div className="flex flex-col h-full">
-          <Tabs defaultValue="login" className="flex flex-col flex-grow">
-            <div className="flex justify-center mb-8">
-              <TabsList className="w-full max-w-md grid grid-cols-2 p-1.5 rounded-lg">
-                <TabsTrigger 
-                  value="login" 
-                  className="py-4 text-base font-medium rounded-md data-[state=active]:shadow-md"
-                >
-                  Log In
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="signup" 
-                  className="py-4 text-base font-medium rounded-md data-[state=active]:shadow-md"
-                >
-                  Sign Up
-                </TabsTrigger>
-              </TabsList>
-            </div>
-            
-            <div className="flex-grow flex justify-center items-center">
-              <div className="w-full max-w-md">
-                <TabsContent value="login" className="mt-6 space-y-8">
-                  <div className="text-center text-xl text-muted-foreground mb-6">
-                    Sign in to your account
-                  </div>
-                  <LoginForm />
-                </TabsContent>
-                
-                <TabsContent value="signup" className="mt-6 space-y-8">
-                  <div className="text-center text-xl text-muted-foreground mb-6">
-                    Create a new account
-                  </div>
-                  <SignUpForm />
-                </TabsContent>
-              </div>
-            </div>
-          </Tabs>
-        </div>
+      {authTab === 'login' ? (
+        <DialogContent className="sm:w-[100vw] w-[90vw] h-[70vh] sm:h-[60vh] sm:p-12 p-6 overflow-y-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {/* <DialogHeader className="mb-6">
+            <DialogTitle className="text-center text-2xl font-bold">
+              {authTab === "login" ? "Welcome back" : "Join Barter Trade"}
+            </DialogTitle>
+            <p className="text-center text-muted-foreground mt-2">
+              {authTab === "login" 
+                ? "Log in to your account to continue trading" 
+                : "Create an account to start bartering today"}
+            </p>
+          </DialogHeader> */}
+          
+          <div className="flex flex-col">
+            <Tabs 
+              value={authTab} 
+              onValueChange={setAuthTab} 
+              className="w-full max-w-md mx-auto">
+              
+              <TabsContent value="login" className="mt-0">
+                <LoginForm />
+                <div className="text-center mt-6">
+                  <p className="text-sm text-muted-foreground">
+                    Don't have an account?{" "}
+                    <button
+                      type="button"
+                      className="text-primary font-medium hover:underline focus:outline-none"
+                      onClick={() => setAuthTab("signup")}
+                    >
+                      Sign up
+                    </button>
+                  </p>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="signup" className="mt-0">
+                <SignUpForm />
+                <div className="text-center mt-6">
+                  <p className="text-sm text-muted-foreground">
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      className="text-primary font-medium hover:underline focus:outline-none"
+                      onClick={() => setAuthTab("login")}
+                    >
+                      Log in
+                    </button>
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </motion.div>
       </DialogContent>
+      ) : (
+       <DialogContent className="sm:w-[100vw] w-[90vw] h-[80vh] sm:h-[70vh] sm:p-12 p-6 overflow-y-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {/* <DialogHeader className="mb-6">
+            <DialogTitle className="text-center text-2xl font-bold">
+              {authTab === "login" ? "Welcome back" : "Join Barter Trade"}
+            </DialogTitle>
+            <p className="text-center text-muted-foreground mt-2">
+              {authTab === "login" 
+                ? "Log in to your account to continue trading" 
+                : "Create an account to start bartering today"}
+            </p>
+          </DialogHeader> */}
+          
+          <div className="flex flex-col">
+            <Tabs 
+              value={authTab} 
+              onValueChange={setAuthTab} 
+              className="w-full max-w-md mx-auto">
+              
+              <TabsContent value="login" className="mt-0">
+                <LoginForm />
+                <div className="text-center mt-6">
+                  <p className="text-sm text-muted-foreground">
+                    Don't have an account?{" "}
+                    <button
+                      type="button"
+                      className="text-primary font-medium hover:underline focus:outline-none"
+                      onClick={() => setAuthTab("signup")}
+                    >
+                      Sign up
+                    </button>
+                  </p>
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="signup" className="mt-0">
+                <SignUpForm />
+                <div className="text-center mt-6">
+                  <p className="text-sm text-muted-foreground">
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      className="text-primary font-medium hover:underline focus:outline-none"
+                      onClick={() => setAuthTab("login")}
+                    >
+                      Log in
+                    </button>
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </motion.div>
+      </DialogContent>
+      )}
+      
+      {/* Dialog content with animation */}
+      
     </Dialog>
   )
 }

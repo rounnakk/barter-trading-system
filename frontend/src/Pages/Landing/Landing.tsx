@@ -12,7 +12,8 @@ import { AuthModal } from '../../Components/AuthModal.tsx'
 import { Link } from "react-router-dom"
 import { Github, Twitter, Instagram, Facebook, ArrowRight, Heart, Mail, Phone } from "lucide-react"
 import { useAuth } from '../../context/AuthContext.tsx'
-
+import { Navbar } from '../../Components/Navbar.tsx';
+import { useLocation } from '../../context/LocationContext.tsx';
 
 // const API_URL = "http://localhost:8000";
 const API_URL = "https://bartrade.koyeb.app";
@@ -46,9 +47,6 @@ const categories = [
 ]
 
 export default function Home() {
-  const [location, setLocation] = useState("Location access needed");
-  const [loadingLocation, setLoadingLocation] = useState(true);
-  const [coords, setCoords] = useState<{ lat: number, lng: number } | null>(null);
   const [nearbyProducts, setNearbyProducts] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(true);
@@ -57,60 +55,38 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const { user } = useAuth();
+  // Get coords from the LocationContext instead of maintaining separate state
+  const { coords, loading: loadingLocation } = useLocation();
 
-
-  // Get user's location
+  // Fetch nearby products when coords change
   useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          setCoords({ lat: latitude, lng: longitude });
-          
-          try {
-            const response = await fetch(
-              `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=29a8d0f8953c4dd9916f235c1aefe163`
-            );
-            const data = await response.json();
-            const city = data.results[0].components.city || data.results[0].components.town;
-            const postcode = data.results[0].components.postcode;
-            setLocation(`${city} - ${postcode}`);
-            
-            // Fetch nearby products once we have coordinates
-            fetchNearbyProducts(latitude, longitude);
-          } catch (error) {
-            setLocation("Error fetching location");
-            setLoadingNearby(false);
-          } finally {
-            setLoadingLocation(false);
-          }
-        },
-        (error) => {
-          setLocation("Location access denied");
-          setLoadingLocation(false);
-          setLoadingNearby(false);
-        }
-      );
+    if (coords?.lat && coords?.lng) {
+      console.log("Fetching nearby products with coords:", coords);
+      fetchNearbyProducts(coords.lat, coords.lng);
     } else {
-      setLocation("Geolocation not supported");
-      setLoadingLocation(false);
+      console.log("No coordinates available for nearby products");
       setLoadingNearby(false);
     }
-    
-    // Always fetch all products regardless of location access
-    fetchAllProducts();
-  }, []);
+  }, [coords]); // Only depend on coords for nearby products
 
-  // Fetch nearby products when we have coordinates
+  // Separate useEffect for all products to avoid unnecessary refetches
+  useEffect(() => {
+    console.log("Fetching all products, category:", selectedCategory);
+    fetchAllProducts(selectedCategory, searchTerm);
+  }, [selectedCategory, searchTerm, user?.id]); // Don't include coords here
+
+  // Fetch nearby products function
   const fetchNearbyProducts = async (latitude: number, longitude: number) => {
     try {
       setLoadingNearby(true);
+      console.log(`Fetching nearby products at lat:${latitude}, lng:${longitude}`);
       const response = await fetch(
         `${API_URL}/products/nearby?latitude=${latitude}&longitude=${longitude}&limit=20`
       );
       
       if (response.ok) {
         const data = await response.json();
+        console.log(`Received ${data.length} nearby products`);
         
         // Filter out products uploaded by the current user
         const filteredProducts = user 
@@ -120,10 +96,12 @@ export default function Home() {
         // Limit to 12 products after filtering
         setNearbyProducts(filteredProducts.slice(0, 12));
       } else {
-        console.error("Failed to fetch nearby products");
+        console.error("Failed to fetch nearby products:", await response.text());
+        setNearbyProducts([]);
       }
     } catch (error) {
       console.error("Error fetching nearby products:", error);
+      setNearbyProducts([]);
     } finally {
       setLoadingNearby(false);
     }
@@ -210,39 +188,13 @@ const handleCategoryClick = (categoryName: string) => {
   return (
     <main className="min-h-screen bg-blue-50">
       <Toaster richColors position='top-right'/>
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-sm">
-        <div className="container flex h-14 items-center justify-between px-4">
-          <div className='h-9 w-9 overflow-hidden rounded-3xl'>
-            <img className='filter invert' src='/bt.png' />
-          </div>
 
-          <div className="flex flex-1 items-center justify-center gap-2 px-4">
-            <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search" 
-                className="pl-8" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <Button type="submit" className="sr-only">Search</Button>
-            </form>
-            <ImageSearchModal />
-            <Button variant="outline" className="gap-2">
-              <MapPin className="h-4 w-4" />
-              {loadingLocation ? (
-                <span className="animate-pulse">Loading location...</span>
-              ) : (
-                location
-              )}
-            </Button>
-            <ProductUploadModal />
-          </div>
-
-          <AuthModal />
-        </div>
-      </header>
+      {/* Navbar */}
+      <Navbar 
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        handleSearch={handleSearch}
+      />
 
       {/* Main Content */}
       <div className="container px-4 py-8">
@@ -259,6 +211,24 @@ const handleCategoryClick = (categoryName: string) => {
           {loadingNearby ? (
             <div className="flex justify-center items-center h-48">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : loadingLocation ? (
+            // Show message when still determining location
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <MapPin className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Determining your location...</h3>
+              <p className="text-muted-foreground max-w-md">
+                Please allow location access to see products near you.
+              </p>
+            </div>
+          ) : coords === null ? (
+            // Show message when location access is denied
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <MapPin className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Location access required</h3>
+              <p className="text-muted-foreground max-w-md">
+                To see products near you, please enable location access in your browser settings.
+              </p>
             </div>
           ) : nearbyProducts.length > 0 ? (
             <ScrollArea>
