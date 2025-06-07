@@ -217,7 +217,7 @@ const markAsRead = async (roomId: string) => {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ user_id: user.id })  // Make sure to send as a JSON object
+      body: JSON.stringify({ room_id: roomId, user_id: user.id })  // Make sure to send as a JSON object
     });
     
     if (!response.ok) {
