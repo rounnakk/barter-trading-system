@@ -14,7 +14,7 @@ import io
 from pymongo import MongoClient, GEOSPHERE
 from datetime import datetime
 import json
-from typing import Optional
+from typing import Optional, List
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -26,8 +26,10 @@ from bson.objectid import ObjectId
 from pydantic import BaseModel
 from fastapi import Body, Depends
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List
 import donation_service
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
 
 
 load_dotenv()
@@ -39,12 +41,27 @@ HF_API = os.getenv("HF_API")
 MONGODB_URI = os.getenv("MONGODB_URI")
 mongo_client = MongoClient(MONGODB_URI)
 db = mongo_client['Cluster0']  # database name
+
 products_collection = db["products"]
 users_collection = db["users"]
+
+# Initialize chat collections
+chat_rooms_collection = db["chat_rooms"]
+messages_collection = db["messages"]
+
 users_collection.create_index([("id", 1)], unique=True)
+
+# Create indexes for chat collections
+chat_rooms_collection.create_index([("product_id", 1), ("buyer_id", 1), ("seller_id", 1)], unique=True)
+messages_collection.create_index([("chat_room_id", 1), ("created_at", 1)])
+chat_rooms_collection.create_index([("buyer_id", 1)])
+chat_rooms_collection.create_index([("seller_id", 1)])
 
 
 products_collection.create_index([("location", GEOSPHERE)])
+
+sse_connections = {}
+
 
 class UserCreate(BaseModel):
     id: str
@@ -59,6 +76,16 @@ class UserUpdate(BaseModel):
     bio: Optional[str] = None
     address: Optional[str] = None
     phone: Optional[str] = None
+
+class ChatRoomCreate(BaseModel):
+    product_id: str
+    buyer_id: str
+    seller_id: str
+
+class MessageCreate(BaseModel):
+    chat_room_id: str
+    sender_id: str
+    message: str
 
 
 cloudinary.config(
@@ -899,6 +926,346 @@ donation_service.setup_collection(db)
 
 # Include the donation router
 app.include_router(donation_service.router)
+
+
+
+@app.post("/chat/rooms")
+async def create_chat_room(room_data: ChatRoomCreate):
+    """Create a new chat room or return existing one"""
+    try:
+        # Check if room already exists
+        existing_room = chat_rooms_collection.find_one({
+            "product_id": room_data.product_id,
+            "buyer_id": room_data.buyer_id,
+            "seller_id": room_data.seller_id
+        })
+        
+        if existing_room:
+            existing_room["_id"] = str(existing_room["_id"])
+            return existing_room
+        
+        # Get product details
+        product = products_collection.find_one({"id": room_data.product_id})
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+            
+        # Get buyer details
+        buyer = users_collection.find_one({"id": room_data.buyer_id})
+        if not buyer:
+            raise HTTPException(status_code=404, detail="Buyer not found")
+            
+        # Get seller details
+        seller = users_collection.find_one({"id": room_data.seller_id})
+        if not seller:
+            raise HTTPException(status_code=404, detail="Seller not found")
+        
+        # Create new room
+        new_room = {
+            "id": str(uuid.uuid4()),
+            "product_id": room_data.product_id,
+            "buyer_id": room_data.buyer_id,
+            "seller_id": room_data.seller_id,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+            "last_message": None,
+            "last_message_at": None,
+            "buyer_read_at": None,
+            "seller_read_at": None,
+            # Include minimal product and user details
+            "product": {
+                "id": product["id"],
+                "name": product["name"],
+                "images": product.get("images", [])
+            },
+            "buyer": {
+                "id": buyer["id"],
+                "name": buyer.get("name", "User"),
+                "avatar": buyer.get("avatar", "")
+            },
+            "seller": {
+                "id": seller["id"],
+                "name": seller.get("name", "User"),
+                "avatar": seller.get("avatar", "")
+            }
+        }
+        
+        result = chat_rooms_collection.insert_one(new_room)
+        new_room["_id"] = str(result.inserted_id)
+        
+        return new_room
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating chat room: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating chat room: {str(e)}")
+
+@app.get("/chat/rooms")
+async def get_chat_rooms(user_id: str = Query(...)):
+    """Get all chat rooms for a user"""
+    try:
+        rooms = list(chat_rooms_collection.find({
+            "$or": [
+                {"buyer_id": user_id},
+                {"seller_id": user_id}
+            ]
+        }).sort("updated_at", -1))
+        
+        # Convert ObjectId to string
+        for room in rooms:
+            if "_id" in room:
+                room["_id"] = str(room["_id"])
+                
+        return rooms
+        
+    except Exception as e:
+        print(f"Error fetching chat rooms: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching chat rooms: {str(e)}")
+
+@app.get("/chat/rooms/{room_id}")
+async def get_chat_room(room_id: str):
+    """Get a specific chat room by ID"""
+    try:
+        room = chat_rooms_collection.find_one({"id": room_id})
+        
+        if not room:
+            raise HTTPException(status_code=404, detail="Chat room not found")
+            
+        room["_id"] = str(room["_id"])
+        return room
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching chat room: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching chat room: {str(e)}")
+
+
+async def sse_generator(user_id: str):
+    """Generate SSE events for a user"""
+    connection_id = str(uuid.uuid4())
+    queue = asyncio.Queue()
+    sse_connections[connection_id] = {"user_id": user_id, "queue": queue}
+    
+    try:
+        # Send initial connection message
+        yield f"data: {json.dumps({'type': 'connected'})}\n\n"
+        
+        # Keep connection alive and send events as they come
+        while True:
+            try:
+                # Wait for new events with a timeout
+                event = await asyncio.wait_for(queue.get(), timeout=30)
+                yield f"data: {json.dumps(event)}\n\n"
+            except asyncio.TimeoutError:
+                # Send heartbeat to keep connection alive
+                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+    except asyncio.CancelledError:
+        # Client disconnected
+        pass
+    finally:
+        # Clean up when connection is closed
+        if connection_id in sse_connections:
+            del sse_connections[connection_id]
+
+@app.get("/chat/events")
+async def chat_events(user_id: str = Query(...)):
+    """Subscribe to real-time chat events using SSE"""
+    return StreamingResponse(
+        sse_generator(user_id),
+        media_type="text/event-stream"
+    )
+
+# Helper function to notify users of new messages
+async def notify_new_message(room_id: str, message: dict):
+    """Send notification to all connected clients about a new message"""
+    room = chat_rooms_collection.find_one({"id": room_id})
+    if not room:
+        return
+        
+    # Get the recipient ID (the user who didn't send the message)
+    recipient_id = room["buyer_id"] if message["sender_id"] == room["seller_id"] else room["seller_id"]
+    
+    # Find all connections for this user
+    for conn_id, connection in list(sse_connections.items()):
+        if connection["user_id"] == recipient_id:
+            # Send the event to this connection
+            event = {
+                "type": "new_message",
+                "room_id": room_id,
+                "message": message
+            }
+            await connection["queue"].put(event)
+
+
+@app.post("/chat/messages")
+async def create_message(message: MessageCreate):
+    """Send a new message in a chat room"""
+    try:
+        # Check if the chat room exists
+        room = chat_rooms_collection.find_one({"id": message.chat_room_id})
+        if not room:
+            raise HTTPException(status_code=404, detail="Chat room not found")
+            
+        # Create the message
+        new_message = {
+            "id": str(uuid.uuid4()),
+            "chat_room_id": message.chat_room_id,
+            "sender_id": message.sender_id,
+            "message": message.message,
+            "created_at": datetime.utcnow(),
+            "is_read": False
+        }
+        
+        result = messages_collection.insert_one(new_message)
+        new_message["_id"] = str(result.inserted_id)
+        
+        # Update the chat room with last message
+        chat_rooms_collection.update_one(
+            {"id": message.chat_room_id},
+            {
+                "$set": {
+                    "last_message": message.message,
+                    "last_message_at": new_message["created_at"],
+                    "updated_at": new_message["created_at"]
+                }
+            }
+        )
+
+        asyncio.create_task(notify_new_message(message.chat_room_id, new_message))
+
+        
+        return new_message
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error sending message: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error sending message: {str(e)}")
+
+@app.get("/chat/messages/{room_id}")
+async def get_messages(
+    room_id: str,
+    limit: int = Query(50, ge=1, le=100),
+    before: Optional[str] = None
+):
+    """Get messages for a chat room with pagination"""
+    try:
+        # Build query
+        query = {"chat_room_id": room_id}
+        
+        if before:
+            # Convert before to datetime for filtering
+            try:
+                before_date = datetime.fromisoformat(before.replace("Z", "+00:00"))
+                query["created_at"] = {"$lt": before_date}
+            except:
+                pass
+        
+        # Get messages
+        messages = list(
+            messages_collection.find(query)
+            .sort("created_at", -1)
+            .limit(limit)
+        )
+        
+        # Convert ObjectId to string
+        for msg in messages:
+            if "_id" in msg:
+                msg["_id"] = str(msg["_id"])
+                
+        # Sort messages in ascending order for client display
+        messages.sort(key=lambda x: x["created_at"])
+                
+        return messages
+        
+    except Exception as e:
+        print(f"Error fetching messages: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching messages: {str(e)}")
+
+@app.post("/chat/read/{room_id}")
+async def mark_messages_read(room_id: str, user_id: str = Body(...)):
+    """Mark all messages in a room as read for a user"""
+    try:
+        # Get the room
+        room = chat_rooms_collection.find_one({"id": room_id})
+        if not room:
+            raise HTTPException(status_code=404, detail="Chat room not found")
+            
+        # Determine if user is buyer or seller
+        is_buyer = room["buyer_id"] == user_id
+        is_seller = room["seller_id"] == user_id
+        
+        if not is_buyer and not is_seller:
+            raise HTTPException(status_code=403, detail="User not authorized for this chat room")
+            
+        # Update read status based on user role
+        read_field = "buyer_read_at" if is_buyer else "seller_read_at"
+        now = datetime.utcnow()
+        
+        # Update the room read timestamp
+        chat_rooms_collection.update_one(
+            {"id": room_id},
+            {"$set": {read_field: now}}
+        )
+        
+        # Mark messages from other user as read
+        messages_collection.update_many(
+            {
+                "chat_room_id": room_id,
+                "sender_id": {"$ne": user_id},
+                "is_read": False
+            },
+            {"$set": {"is_read": True}}
+        )
+        
+        return {"success": True}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error marking messages as read: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error marking messages as read: {str(e)}")
+
+@app.get("/chat/unread")
+async def get_unread_count(user_id: str = Query(...)):
+    """Get the number of unread messages across all chats for a user"""
+    try:
+        # Get rooms where the user is buyer or seller
+        rooms = list(chat_rooms_collection.find({
+            "$or": [
+                {"buyer_id": user_id},
+                {"seller_id": user_id}
+            ]
+        }))
+        
+        total_unread = 0
+        
+        for room in rooms:
+            # Check if the user is buyer or seller
+            is_buyer = room["buyer_id"] == user_id
+            read_field = "buyer_read_at" if is_buyer else "seller_read_at"
+            
+            # If no read timestamp or it's older than the last message
+            last_read = room.get(read_field)
+            last_message_at = room.get("last_message_at")
+            
+            if last_message_at and (not last_read or last_message_at > last_read):
+                # Count unread messages
+                unread_count = messages_collection.count_documents({
+                    "chat_room_id": room["id"],
+                    "sender_id": {"$ne": user_id},
+                    "created_at": {"$gt": last_read} if last_read else {"$exists": True}
+                })
+                
+                total_unread += unread_count
+        
+        return {"unread_count": total_unread}
+        
+    except Exception as e:
+        print(f"Error getting unread count: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting unread count: {str(e)}")
+
 
 
 if __name__ == '__main__':

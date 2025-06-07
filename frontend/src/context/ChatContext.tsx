@@ -208,27 +208,29 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Mark messages as read
-  const markAsRead = async (roomId: string) => {
-    if (!user) return;
+const markAsRead = async (roomId: string) => {
+  if (!user) return;
+  
+  try {
+    const response = await fetch(`${API_URL}/chat/read/${roomId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ user_id: user.id })  // Make sure to send as a JSON object
+    });
     
-    try {
-      await fetch(`${API_URL}/chat/read/${roomId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          user_id: user.id
-        })
-      });
-      
-      // Update unread count after marking messages as read
-      fetchUnreadCount();
-      
-    } catch (error) {
-      console.error("Error marking messages as read:", error);
+    if (!response.ok) {
+      throw new Error(`Failed to mark messages as read: ${response.status}`);
     }
-  };
+    
+    // Update unread count after marking messages as read
+    fetchUnreadCount();
+    
+  } catch (error) {
+    console.error("Error marking messages as read:", error);
+  }
+};
 
   // Initiate a new chat with a seller
   const initiateChatWithSeller = async (
