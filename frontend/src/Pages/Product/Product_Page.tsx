@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { MapPin, MessageCircle, User, ChevronLeft, ChevronRight, ArrowLeft, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
@@ -9,6 +9,19 @@ import { toast, Toaster } from "sonner";
 import { Github, Twitter, Instagram, Facebook, ArrowRight, Heart, Mail, Phone } from "lucide-react";
 import { Navbar } from "../../Components/Navbar.tsx";
 import { useChat } from '../../context/ChatContext.tsx';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+
+// Fix Leaflet's default icon path without importing the files directly
+const DefaultIcon = L.icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 
 // const API_URL = "http://localhost:8000";
@@ -58,6 +71,8 @@ const ProductPage = () => {
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const { user } = useAuth();
+  const mapRef = useRef(null);
+  
 
   const navigate = useNavigate();
   const { initiateChatWithSeller } = useChat();
@@ -236,6 +251,36 @@ const handleContactSeller = async () => {
   }
 };
 
+useEffect(() => {
+    // Add a simple timeout to delay map initialization
+    const timer = setTimeout(() => {
+      if (product?.location && mapRef.current) {
+        // Initialize map only after the div is rendered and we have location data
+        
+        // Check if map is already initialized (safer way)
+        if (mapRef.current && '_leaflet_id' in mapRef.current) return;
+        
+        const map = L.map(mapRef.current).setView(
+          [product.location.coordinates[1], product.location.coordinates[0]], 
+          13
+        );
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Add a marker at the product location
+        L.marker([product.location.coordinates[1], product.location.coordinates[0]])
+          .addTo(map)
+          .bindPopup(product.name);
+      }
+    }, 500); // 500ms delay gives DOM time to render fully
+    
+    // Clean up the timer when component unmounts
+    return () => clearTimeout(timer);
+  }, [product, mapRef]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -404,11 +449,8 @@ const handleContactSeller = async () => {
                   </div>
                   
                   {product.location && (
-                    <div className="w-full h-48 bg-muted rounded-lg mb-4">
-                      {/* You can integrate a map here using Google Maps, Mapbox, etc. */}
-                      <div className="h-full flex items-center justify-center text-muted-foreground">
-                        Map of item location
-                      </div>
+                    <div className="w-full h-48 bg-muted rounded-lg mb-4" ref={mapRef}>
+                      {/* Map will be initialized here by useEffect */}
                     </div>
                   )}
                   
