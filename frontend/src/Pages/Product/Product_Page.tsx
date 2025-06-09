@@ -11,6 +11,9 @@ import { Navbar } from "../../Components/Navbar.tsx";
 import { useChat } from '../../context/ChatContext.tsx';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useLayoutEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+
 
 
 // Fix Leaflet's default icon path without importing the files directly
@@ -61,6 +64,11 @@ const categories = [
   { name: "Other", color: "bg-gray-100" }
 ];
 
+interface MapElement extends HTMLDivElement {
+  _leaflet_id?: number;
+  _leaflet?: any;
+}
+
 const ProductPage = () => {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
@@ -70,13 +78,24 @@ const ProductPage = () => {
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [hasLocation, setHasLocation] = useState(false);
+
+
   const { user } = useAuth();
-  const mapRef = useRef(null);
+  const mapRef = useRef<MapElement | null>(null);
   
 
   const navigate = useNavigate();
   const { initiateChatWithSeller } = useChat();
 
+  useEffect(() => {
+    if (product?.location?.coordinates) {
+      setHasLocation(true);
+    } else {
+      setHasLocation(false);
+    }
+  }, [product]);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -252,34 +271,100 @@ const handleContactSeller = async () => {
 };
 
 useEffect(() => {
-    // Add a simple timeout to delay map initialization
-    const timer = setTimeout(() => {
-      if (product?.location && mapRef.current) {
-        // Initialize map only after the div is rendered and we have location data
-        
-        // Check if map is already initialized (safer way)
-        if (mapRef.current && '_leaflet_id' in mapRef.current) return;
-        
-        const map = L.map(mapRef.current).setView(
-          [product.location.coordinates[1], product.location.coordinates[0]], 
-          13
-        );
-        
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-        
-        // Add a marker at the product location
-        L.marker([product.location.coordinates[1], product.location.coordinates[0]])
-          .addTo(map)
-          .bindPopup(product.name);
-      }
-    }, 500); // 500ms delay gives DOM time to render fully
+  // Clear any existing map instance first to prevent duplicates
+  if (mapRef.current && mapRef.current._leaflet_id) {
+    mapRef.current._leaflet = null;
+  }
+
+  // Function to initialize the map
+  const initializeMap = () => {
+    if (!product?.location || !mapRef.current || !document.contains(mapRef.current)) {
+      // Either product location is not available or map container is not in the DOM
+      return false;
+    }
     
-    // Clean up the timer when component unmounts
-    return () => clearTimeout(timer);
-  }, [product, mapRef]);
+    try {
+      // Check if map is already initialized
+      if (mapRef.current._leaflet_id) {
+        return true; // Map already exists
+      }
+      
+      // Create the map
+      const map = L.map(mapRef.current).setView(
+        [product.location.coordinates[1], product.location.coordinates[0]], 
+        13
+      );
+      
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+      
+      // Add a marker at the product location
+      L.marker([product.location.coordinates[1], product.location.coordinates[0]])
+        .addTo(map)
+        .bindPopup(product.name || "Product Location");
+        
+      // Force map to refresh its container size
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 100);
+      
+      setMapInitialized(true);
+      return true;
+    } catch (err) {
+      console.error("Error initializing map:", err);
+      return false;
+    }
+  };
+  
+  // Try to initialize immediately
+  if (product?.location && mapRef.current) {
+    const initialized = initializeMap();
+    
+    // If not successful, try again with a series of timeouts
+    if (!initialized) {
+      const timeouts = [100, 300, 500, 1000, 2000]; // Multiple attempts
+      
+      timeouts.forEach((timeout, index) => {
+        setTimeout(() => {
+          if (!mapInitialized && mapRef.current) {
+            console.log(`Attempt ${index + 1} to initialize map...`);
+            initializeMap();
+          }
+        }, timeout);
+      });
+    }
+  }
+  
+  // Cleanup function
+  return () => {
+    if (mapRef.current && mapRef.current._leaflet_id) {
+      // If there's a map instance, remove it on component unmount
+      try {
+        const container = mapRef.current;
+        
+        // Use type assertion to tell TypeScript that this is safe
+        const leafletElement = L.DomUtil.get(container) as unknown as {
+          _leaflet_id: number | null;
+        };
+        
+        if (leafletElement && leafletElement._leaflet_id) {
+          leafletElement._leaflet_id = null;
+        }
+      } catch (e) {
+        console.error("Error cleaning up map:", e);
+      }
+    }
+  };
+}, [product, mapInitialized]);
+
+// Also add a cleanup effect for when the component unmounts
+useEffect(() => {
+  return () => {
+    setMapInitialized(false);
+  };
+}, []);
 
   if (loading) {
     return (
@@ -448,12 +533,54 @@ useEffect(() => {
                     </div>
                   </div>
                   
-                  {product.location && (
-                    <div className="w-full h-48 bg-muted rounded-lg mb-4" ref={mapRef}>
-                      {/* Map will be initialized here by useEffect */}
+                  {/* {product.location && (
+                    <div 
+                      className="w-full h-48 bg-blue-50 rounded-lg mb-4 relative overflow-hidden" 
+                      ref={mapRef}
+                      style={{ minHeight: '180px' }}
+                    >
+                      {!mapInitialized && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                      )}
                     </div>
-                  )}
-                  
+                  )} */}
+                  {product?.location && (
+    <div className="w-full h-48 bg-muted rounded-lg mb-4 overflow-hidden">
+      {hasLocation ? (
+        <MapContainer 
+          center={[
+            product.location.coordinates[1], 
+            product.location.coordinates[0]
+          ]} 
+          zoom={13} 
+          style={{ height: '100%', width: '100%' }}
+          zoomControl={false}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+          <Marker 
+            position={[
+              product.location.coordinates[1], 
+              product.location.coordinates[0]
+            ]}
+          >
+            <Popup>
+              {product.name}
+            </Popup>
+          </Marker>
+        </MapContainer>
+      ) : (
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      )}
+    </div>
+  )}
+
                   {user?.id !== product.user.id ? (
                     <Button 
                       className="w-full py-6 text-lg font-medium"
