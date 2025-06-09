@@ -30,6 +30,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // const API_URL = "http://localhost:8000";
 const API_URL = "https://bartrade.koyeb.app";
 
+// Update your Product interface definition to include distance
 interface Product {
   id: string;
   name: string;
@@ -50,6 +51,8 @@ interface Product {
     type: string;
     coordinates: [number, number];
   };
+  distance?: number;  // Add this line to fix the error
+  match_reasons?: string[];  // Also add this for completeness
 }
 
 // Define categories (same as in Landing.tsx for consistency)
@@ -80,7 +83,7 @@ const ProductPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [mapInitialized, setMapInitialized] = useState(false);
   const [hasLocation, setHasLocation] = useState(false);
-
+  const [recommendationsType, setRecommendationsType] = useState<"personalized" | "general" | "none">("none");
 
   const { user } = useAuth();
   const mapRef = useRef<MapElement | null>(null);
@@ -166,20 +169,57 @@ const ProductPage = () => {
 
   const fetchRecommendedProducts = async (userId: string) => {
     try {
-      const response = await fetch(`${API_URL}/products/recommended/${userId}?limit=8`);
+      // Check if user has uploaded any products first
+      const hasUploads = await checkUserUploads(userId);
+      
+      if (!hasUploads) {
+        // Show toast to inform user they need to upload products for better recommendations
+        toast.info(
+          "Upload products to get personalized trading recommendations based on what you own", 
+          { duration: 5000 }
+        );
+        setRecommendationsType("general");
+      } else {
+        setRecommendationsType("personalized");
+      }
+      
+      // Include product parameters to help with matching
+      const priceParam = product ? `&price=${product.price}` : '';
+      const locationParam = product?.location ? 
+        `&lat=${product.location.coordinates[1]}&lng=${product.location.coordinates[0]}` : '';
+      const categoryParam = product?.categories && product.categories.length > 0 ? 
+        `&category=${encodeURIComponent(product.categories[0])}` : '';
+      
+      const response = await fetch(
+        `${API_URL}/products/recommended/${userId}?limit=8&productId=${id}${priceParam}${locationParam}${categoryParam}`
+      );
       
       if (response.ok) {
         const data = await response.json();
-        // Filter out current product and related products
-        const filtered = data
-          .filter((p: Product) => p.id !== id)
-          .slice(0, 8);
+        // Filter out current product to be safe
+        const filtered = data.filter((p: Product) => p.id !== id);
         setRecommendedProducts(filtered);
       }
     } catch (err) {
       console.error("Error fetching recommended products:", err);
+      setRecommendationsType("general");
       // Fallback to popular products
       fetchPopularProducts();
+    }
+  };
+
+  // Add this helper function to check if user has uploaded any products
+  const checkUserUploads = async (userId: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${API_URL}/users/${userId}/products?limit=1`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.length > 0;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error checking user uploads:", error);
+      return false;
     }
   };
 
@@ -413,7 +453,7 @@ useEffect(() => {
           <div className="container mx-auto px-4">
             <p className="text-sm text-muted-foreground">
               <Link to="/" className="hover:text-primary transition-colors">Home</Link> / 
-              {product.categories && product.categories.length > 0 && (
+              {product.categories?.length > 0 && (
                 <>
                   <Link 
                     to={`/?category=${encodeURIComponent(product.categories[0])}`} 
@@ -465,7 +505,7 @@ useEffect(() => {
             <div className="lg:col-span-4">
               <h1 className="text-2xl font-bold">
                 {product.name}
-                {product.categories && product.categories.length > 0 && (
+                {product.categories?.length > 0 && (
                   <span className="ml-2 text-sm text-green-600 bg-green-50 px-2 py-1 rounded">
                     ✔ BarTrade eligible
                   </span>
@@ -484,7 +524,7 @@ useEffect(() => {
                   {product.description}
                 </p>
                 
-                {product.categories && product.categories.length > 0 && (
+                {product.categories?.length > 0 && (
                   <div>
                     <h4 className="font-medium mb-2">Categories</h4>
                     <div className="flex flex-wrap gap-2">
@@ -599,10 +639,38 @@ useEffect(() => {
             </div>
           </div>
 
+
           {/* Recommended Products Section */}
           {recommendedProducts.length > 0 && (
             <div className="mt-16 relative">
-              <h2 className="text-2xl font-bold mb-6">Recommended for You</h2>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold">
+                    {recommendationsType === "personalized" ? "Recommended Trading Options" : "Items You May Like"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {recommendationsType === "personalized" 
+                      ? "Based on your products, location and preferences" 
+                      : recommendationsType === "general" 
+                        ? "Upload products to get personalized recommendations"
+                        : "Popular products you might be interested in"
+                    }
+                  </p>
+                </div>
+                
+                {recommendationsType === "general" && user && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate('/upload')}
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                    Upload Products
+                  </Button>
+                )}
+              </div>
+              
               <div className="relative">
                 <button 
                   onClick={() => {
@@ -628,7 +696,11 @@ useEffect(() => {
                   style={{ scrollBehavior: 'smooth' }}
                 >
                   {recommendedProducts.map((recProduct) => (
-                    <ProductCard key={recProduct.id} product={recProduct} />
+                    <ProductCard 
+                      key={recProduct.id} 
+                      product={recProduct} 
+                      badges={recProduct.match_reasons || []}
+                    />
                   ))}
                 </div>
               </div>
@@ -815,7 +887,7 @@ useEffect(() => {
 };
 
 // ProductCard for the related and recommended products
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product, badges = [] }: { product: Product; badges?: string[] }) {
   // Format price with Indian Rupee formatting
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -825,10 +897,17 @@ function ProductCard({ product }: { product: Product }) {
     }).format(price);
   };
 
+  const getBadgeColor = (badge: string) => {
+    if (badge.includes('price')) return 'bg-green-100 text-green-800';
+    if (badge.includes('location') || badge.includes('nearby')) return 'bg-blue-100 text-blue-800';
+    if (badge.includes('category') || badge.includes('similar')) return 'bg-purple-100 text-purple-800';
+    return 'bg-gray-100 text-gray-800';
+  };
+
   return (
     <Link to={`/product/${product.id}`} className="flex-none w-[250px]">
       <div className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 h-full">
-        <div className="aspect-square mb-3 overflow-hidden rounded-md bg-muted">
+        <div className="aspect-square mb-3 overflow-hidden rounded-md bg-muted relative">
           {product.images && product.images.length > 0 ? (
             <img
               src={product.images[0]}
@@ -840,10 +919,27 @@ function ProductCard({ product }: { product: Product }) {
               <User className="w-12 h-12 text-muted-foreground" />
             </div>
           )}
+          
+          {badges && badges.length > 0 && (
+            <div className="absolute bottom-1 left-1">
+              <span className={`text-xs px-2 py-0.5 rounded-full ${getBadgeColor(badges[0])}`}>
+                {badges[0]}
+              </span>
+            </div>
+          )}
         </div>
         <h3 className="font-medium truncate">{product.name}</h3>
         <p className="text-sm text-muted-foreground truncate">{product.user.name}</p>
-        <p className="font-bold mt-1">{formatPrice(product.price)}</p>
+        <div className="flex justify-between items-center mt-1">
+          <p className="font-bold">{formatPrice(product.price)}</p>
+          {product.distance && (
+            <span className="text-xs text-muted-foreground">
+              {product.distance < 1 
+                ? `${Math.round(product.distance * 1000)}m` 
+                : `${product.distance.toFixed(1)}km`}
+            </span>
+          )}
+        </div>
       </div>
     </Link>
   );

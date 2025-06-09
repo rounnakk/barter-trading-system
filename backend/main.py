@@ -648,75 +648,254 @@ async def record_product_view(
         return {"success": False, "error": str(e)}
 
 # Add an endpoint to fetch recommended products for a user
+# Replace the existing get_recommended_products function with this improved version
+
 @app.get("/products/recommended/{user_id}")
 async def get_recommended_products(
     user_id: str,
+    productId: str = None,
+    price: float = None,
+    lat: float = None, 
+    lng: float = None,
+    category: str = None,
     limit: int = Query(10, ge=1, le=50)
 ):
-    """Get personalized product recommendations for a user"""
+    """Get personalized product recommendations for a user based on price, location, and category"""
     try:
-        # 1. Get user's view history
-        user_views = list(db["product_views"].find(
-            {"user_id": user_id},
-            {"product_id": 1}
-        ).sort("timestamp", -1).limit(10))
+        # Check if user has uploaded products
+        user_products = list(products_collection.find({"user.id": user_id}))
+        has_uploads = len(user_products) > 0
         
-        product_ids = [view["product_id"] for view in user_views]
-        
-        if not product_ids:
-            # If no view history, return popular products
-            return await get_popular_products(limit)
-        
-        # 2. Find products the user has viewed
-        viewed_products = list(products_collection.find(
-            {"id": {"$in": product_ids}},
-            {"name": 1, "description": 1, "categories": 1}
-        ))
-        
-        # 3. Generate a combined query vector based on viewed products
-        combined_text = " ".join([
-            f"{p.get('name', '')} {p.get('description', '')} {' '.join(p.get('categories', []))}"
-            for p in viewed_products
-        ])
-        
-        query_vector = model.encode(combined_text).tolist()
-        
-        # 4. Query Pinecone for similar products
-        pinecone_result = index.query(
-            vector=query_vector,
-            top_k=limit * 2,  # Get more than needed to filter
-            include_values=False,
-            include_metadata=True,
-            filter={"product_id": {"$nin": product_ids}}  # Exclude already viewed products
-        )
-        
-        if not pinecone_result or 'matches' not in pinecone_result:
-            # Fallback to popular products if no matches
-            return await get_popular_products(limit)
-        
-        # 5. Get full product details for recommendations
-        rec_product_ids = [
-            match["metadata"].get("product_id") 
-            for match in pinecone_result["matches"]
-            if "product_id" in match.get("metadata", {})
-        ]
-        
-        recommended_products = list(products_collection.find(
-            {"id": {"$in": rec_product_ids}}
-        ).limit(limit))
-        
-        # Convert ObjectId to string
-        for product in recommended_products:
-            if "_id" in product:
-                product["_id"] = str(product["_id"])
+        # User hasn't uploaded any products - use generic recommendations
+        if not has_uploads:
+            # Build a query based on current product attributes
+            query = {}
+            
+            if productId:
+                query["id"] = {"$ne": productId}  # Exclude current product
                 
-        return recommended_products[:limit]  # Limit results
-        
+            if user_id:
+                query["user.id"] = {"$ne": user_id}  # Exclude user's own products
+                
+            # 1. Price-based matching (if price provided)
+            if price is not None:
+                # Find products within ±20% of current price
+                price_min = price * 0.8
+                price_max = price * 1.2
+                query["price"] = {"$gte": price_min, "$lte": price_max}
+                
+            # 2. Category-based filtering (if category provided)
+            if category:
+                query["categories"] = {"$regex": category, "$options": "i"}
+                
+            # Get similar products with price and category matching
+            matched_products = list(products_collection.find(query).sort("created_at", -1).limit(limit))
+            
+            # Add match reason to products
+            for product in matched_products:
+                product["match_reasons"] = []
+                
+                # Add price match reason if within range
+                if price is not None and price_min <= product["price"] <= price_max:
+                    product["match_reasons"].append("Similar price")
+                    
+                # Add category match reason
+                if category and any(cat.lower() == category.lower() for cat in product.get("categories", [])):
+                    product["match_reasons"].append("Similar category")
+                
+                # Convert ObjectId to string
+                if "_id" in product:
+                    product["_id"] = str(product["_id"])
+                    
+            # If not enough products found, add popular products
+            if len(matched_products) < limit:
+                # Get popular products excluding already recommended ones
+                existing_ids = [p["id"] for p in matched_products]
+                popular_query = {"id": {"$nin": existing_ids}}
+                
+                if productId:
+                    popular_query["id"] = {"$ne": productId}
+                    
+                if user_id:
+                    popular_query["user.id"] = {"$ne": user_id}
+                    
+                popular_products = list(
+                    products_collection.find(popular_query)
+                    .sort("view_count", -1)
+                    .limit(limit - len(matched_products))
+                )
+                
+                # Convert ObjectId to string
+                for product in popular_products:
+                    product["match_reasons"] = ["Popular item"]
+                    if "_id" in product:
+                        product["_id"] = str(product["_id"])
+                        
+                matched_products.extend(popular_products)
+                
+            return matched_products
+            
+        # User has uploaded products - do more sophisticated matching
+        else:
+            # STEP 1: PRICE MATCHING (highest priority)
+            price_matched = []
+            price_query = {}
+            
+            if price is not None:
+                # Get average price of user's products to find suitable price range
+                user_avg_price = sum(p.get("price", 0) for p in user_products) / len(user_products)
+                
+                # Adjust matching range based on current product and user's average
+                price_min = min(price, user_avg_price) * 0.7
+                price_max = max(price, user_avg_price) * 1.3
+                
+                price_query = {
+                    "price": {"$gte": price_min, "$lte": price_max},
+                    "user.id": {"$ne": user_id}  # Exclude user's own products
+                }
+                
+                if productId:
+                    price_query["id"] = {"$ne": productId}  # Exclude current product
+                    
+                price_matched = list(products_collection.find(price_query).limit(limit))
+                
+            # STEP 2: LOCATION MATCHING (second priority)
+            location_matched = []
+            if lat is not None and lng is not None:
+                # Find products near current location
+                location_query = {
+                    "location": {
+                        "$near": {
+                            "$geometry": {
+                                "type": "Point",
+                                "coordinates": [lng, lat]  # GeoJSON format: [longitude, latitude]
+                            },
+                            "$maxDistance": 10000  # 10km radius
+                        }
+                    },
+                    "user.id": {"$ne": user_id}  # Exclude user's own products
+                }
+                
+                if productId:
+                    location_query["id"] = {"$ne": productId}  # Exclude current product
+                    
+                # Exclude products already included in price matching
+                if price_matched:
+                    location_query["id"] = {
+                        "$nin": [p["id"] for p in price_matched]
+                    }
+                    
+                location_matched = list(products_collection.find(location_query).limit(limit))
+                
+                # Calculate distance for each product
+                for product in location_matched:
+                    if product.get("location") and product["location"].get("coordinates"):
+                        # Calculate distance in kilometers using Haversine formula
+                        from math import sin, cos, sqrt, atan2, radians
+                        
+                        R = 6371.0  # Earth radius in kilometers
+                        
+                        lat1 = radians(lat)
+                        lon1 = radians(lng)
+                        lat2 = radians(product["location"]["coordinates"][1])
+                        lon2 = radians(product["location"]["coordinates"][0])
+                        
+                        dlon = lon2 - lon1
+                        dlat = lat2 - lat1
+                        
+                        a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+                        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+                        
+                        distance = R * c
+                        product["distance"] = round(distance, 1)  # kilometers, rounded to 1 decimal
+            
+            # STEP 3: CATEGORY MATCHING (third priority)
+            category_matched = []
+            if category or (user_products and any("categories" in p for p in user_products)):
+                # Get all categories from user's products
+                user_categories = set()
+                for p in user_products:
+                    if "categories" in p and p["categories"]:
+                        user_categories.update(p["categories"])
+                        
+                # Add current product category if provided
+                if category:
+                    user_categories.add(category)
+                
+                if user_categories:
+                    category_query = {
+                        "categories": {"$in": list(user_categories)},
+                        "user.id": {"$ne": user_id}  # Exclude user's own products
+                    }
+                    
+                    if productId:
+                        category_query["id"] = {"$ne": productId}  # Exclude current product
+                        
+                    # Exclude products already included in other matching methods
+                    excluded_ids = [p["id"] for p in price_matched + location_matched]
+                    if excluded_ids:
+                        category_query["id"] = {"$nin": excluded_ids}
+                        
+                    category_matched = list(products_collection.find(category_query).limit(limit))
+            
+            # Combine all matched products with priority (price > location > category)
+            all_matches = []
+            
+            # Add price matched products with tag
+            for p in price_matched:
+                p["match_reasons"] = ["Similar price"]
+                if "_id" in p:
+                    p["_id"] = str(p["_id"])
+                all_matches.append(p)
+                
+            # Add location matched products with tag
+            for p in location_matched:
+                distance_str = f"Nearby ({p.get('distance', '?')}km)"
+                p["match_reasons"] = [distance_str]
+                if "_id" in p:
+                    p["_id"] = str(p["_id"])
+                all_matches.append(p)
+                
+            # Add category matched products with tag
+            for p in category_matched:
+                p["match_reasons"] = ["Similar category"]
+                if "_id" in p:
+                    p["_id"] = str(p["_id"])
+                all_matches.append(p)
+            
+            # If we still don't have enough products, add popular products
+            if len(all_matches) < limit:
+                # Get popular products excluding already recommended ones
+                existing_ids = [p["id"] for p in all_matches]
+                popular_query = {"id": {"$nin": existing_ids}}
+                
+                if productId:
+                    popular_query["id"] = {"$ne": productId}
+                    
+                if user_id:
+                    popular_query["user.id"] = {"$ne": user_id}
+                    
+                popular_products = list(
+                    products_collection.find(popular_query)
+                    .sort("view_count", -1)
+                    .limit(limit - len(all_matches))
+                )
+                
+                # Convert ObjectId to string
+                for p in popular_products:
+                    p["match_reasons"] = ["Popular item"]
+                    if "_id" in p:
+                        p["_id"] = str(p["_id"])
+                        
+                all_matches.extend(popular_products)
+                
+            return all_matches[:limit]  # Return at most 'limit' products
+                
     except Exception as e:
         print(f"Error getting recommendations: {str(e)}")
         # Fallback to popular products
         return await get_popular_products(limit)
-
+    
 # Helper function to get popular products
 async def get_popular_products(limit: int = 10):
     try:
