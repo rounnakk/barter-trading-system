@@ -547,39 +547,39 @@ useEffect(() => {
                     </div>
                   )} */}
                   {product?.location && (
-    <div className="w-full h-48 bg-muted rounded-lg mb-4 overflow-hidden">
-      {hasLocation ? (
-        <MapContainer 
-          center={[
-            product.location.coordinates[1], 
-            product.location.coordinates[0]
-          ]} 
-          zoom={13} 
-          style={{ height: '100%', width: '100%' }}
-          zoomControl={false}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
-          <Marker 
-            position={[
-              product.location.coordinates[1], 
-              product.location.coordinates[0]
-            ]}
-          >
-            <Popup>
-              {product.name}
-            </Popup>
-          </Marker>
-        </MapContainer>
-      ) : (
-        <div className="flex items-center justify-center h-full">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      )}
-    </div>
-  )}
+                    <div className="w-full h-48 bg-muted rounded-lg mb-4 overflow-hidden">
+                      {hasLocation ? (
+                        <MapContainer 
+                          center={[
+                            product.location.coordinates[1], 
+                            product.location.coordinates[0]
+                          ]} 
+                          zoom={13} 
+                          style={{ height: '100%', width: '100%' }}
+                          zoomControl={false}
+                        >
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                          />
+                          <Marker 
+                            position={[
+                              product.location.coordinates[1], 
+                              product.location.coordinates[0]
+                            ]}
+                          >
+                            <Popup>
+                              {product.name}
+                            </Popup>
+                          </Marker>
+                        </MapContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {user?.id !== product.user.id ? (
                     <Button 
