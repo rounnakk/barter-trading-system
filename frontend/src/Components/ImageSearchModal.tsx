@@ -49,7 +49,7 @@ export function ImageSearchModal() {
       toast.loading("Analyzing image...", { id: "image-search" })
       
       // Make API request
-      const response = await fetch("http://localhost:8000/api/search_by_image", {
+      const response = await fetch("https://bartrade.koyeb.app/api/search_by_image", {
         method: "POST",
         body: formData,
       })
