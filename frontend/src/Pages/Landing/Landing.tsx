@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { Button } from "../../Components/ui/button.tsx"
 import { Input } from "../../Components/ui/input.tsx"
 import { ScrollArea, ScrollBar } from "../../Components/ui/scroll-area.tsx"
-import { Camera, MapPin, Menu, Plus, Search, User, Loader2 } from "lucide-react"
+import { Camera, MapPin, Menu, Plus, Search, User, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { ProductUploadModal } from '../../Components/ProductUploadModal.tsx'
 import { ImageSearchModal } from '../../Components/ImageSearchModal.tsx'
 import { Toaster } from 'sonner';
@@ -53,6 +53,17 @@ export default function Home() {
   const [loadingAll, setLoadingAll] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const productsPerPage = 12;
+
+  // Get current products for pagination
+  const indexOfLastProduct = page * productsPerPage;
+  const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
+  const currentProducts = allProducts.slice(indexOfFirstProduct, indexOfLastProduct);
+
+  // Function to change page
+  const paginate = (pageNumber: number) => setPage(pageNumber);
+
 
   const { user } = useAuth();
   // Get coords from the LocationContext instead of maintaining separate state
@@ -75,53 +86,20 @@ export default function Home() {
     fetchAllProducts(selectedCategory, searchTerm);
   }, [selectedCategory, searchTerm, user?.id]); // Don't include coords here
 
-  // Fetch nearby products function
-  const fetchNearbyProducts = async (latitude: number, longitude: number) => {
-    try {
-      setLoadingNearby(true);
-      console.log(`Fetching nearby products at lat:${latitude}, lng:${longitude}`);
-      const response = await fetch(
-        `${API_URL}/products/nearby?latitude=${latitude}&longitude=${longitude}&limit=20`
-      );
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log(`Received ${data.length} nearby products`);
-        
-        // Filter out products uploaded by the current user
-        const filteredProducts = user 
-          ? data.filter(product => product.user?.id !== user.id)
-          : data;
-        
-        // Limit to 12 products after filtering
-        setNearbyProducts(filteredProducts.slice(0, 12));
-      } else {
-        console.error("Failed to fetch nearby products:", await response.text());
-        setNearbyProducts([]);
-      }
-    } catch (error) {
-      console.error("Error fetching nearby products:", error);
-      setNearbyProducts([]);
-    } finally {
-      setLoadingNearby(false);
-    }
-  };
-
-  // Update fetchAllProducts to filter out user's own products
-  // Update the fetchAllProducts function signature to accept null
-// In your fetchAllProducts function
+  // Update the fetchAllProducts function to show all products
 const fetchAllProducts = async (category?: string | null, search?: string) => {
   try {
     setLoadingAll(true);
-    let url = `${API_URL}/products?limit=20`;
+    let url = `${API_URL}/products`; // Remove the limit parameter
     
     // Only add category parameter if it's not null and not "All"
     if (category && category !== "All") {
-      url += `&category=${encodeURIComponent(category)}`;
+      url += `?category=${encodeURIComponent(category)}`;
     }
     
     if (search) {
-      url += `&search=${encodeURIComponent(search)}`;
+      // Add appropriate query parameter separator
+      url += url.includes('?') ? `&search=${encodeURIComponent(search)}` : `?search=${encodeURIComponent(search)}`;
     }
     
     console.log("Fetching products from URL:", url);
@@ -139,8 +117,8 @@ const fetchAllProducts = async (category?: string | null, search?: string) => {
       
       console.log("After user filtering:", filteredProducts.length);
       
-      // Limit to 12 products after filtering
-      setAllProducts(filteredProducts.slice(0, 12));
+      // Set all products instead of limiting to 12
+      setAllProducts(filteredProducts);
     } else {
       console.error("Failed to fetch all products");
     }
@@ -148,6 +126,40 @@ const fetchAllProducts = async (category?: string | null, search?: string) => {
     console.error("Error fetching all products:", error);
   } finally {
     setLoadingAll(false);
+  }
+};
+
+// Also update the fetchNearbyProducts function to show more products
+const fetchNearbyProducts = async (latitude: number, longitude: number) => {
+  try {
+    setLoadingNearby(true);
+    console.log(`Fetching nearby products at lat:${latitude}, lng:${longitude}`);
+    
+    // Remove the limit parameter to get all nearby products
+    const response = await fetch(
+      `${API_URL}/products/nearby?latitude=${latitude}&longitude=${longitude}`
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`Received ${data.length} nearby products`);
+      
+      // Filter out products uploaded by the current user
+      const filteredProducts = user 
+        ? data.filter(product => product.user?.id !== user.id)
+        : data;
+      
+      // Show all nearby products
+      setNearbyProducts(filteredProducts);
+    } else {
+      console.error("Failed to fetch nearby products:", await response.text());
+      setNearbyProducts([]);
+    }
+  } catch (error) {
+    console.error("Error fetching nearby products:", error);
+    setNearbyProducts([]);
+  } finally {
+    setLoadingNearby(false);
   }
 };
 
@@ -308,6 +320,40 @@ const handleCategoryClick = (categoryName: string) => {
             </div>
           )}
         </section>
+      </div>
+
+      <div className="flex justify-center mt-8">
+        {allProducts.length > productsPerPage && (
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => paginate(page > 1 ? page - 1 : 1)}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            {/* Page number buttons */}
+            {Array.from({ length: Math.ceil(allProducts.length / productsPerPage) }).map((_, i) => (
+              <Button
+                key={i}
+                variant={page === i + 1 ? "default" : "outline"}
+                onClick={() => paginate(i + 1)}
+                className="w-10 h-10 p-0"
+              >
+                {i + 1}
+              </Button>
+            )).slice(Math.max(0, page - 3), Math.min(page + 2, Math.ceil(allProducts.length / productsPerPage)))}
+            
+            <Button 
+              variant="outline" 
+              onClick={() => paginate(page < Math.ceil(allProducts.length / productsPerPage) ? page + 1 : page)}
+              disabled={page === Math.ceil(allProducts.length / productsPerPage)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
     {/* Footer */}

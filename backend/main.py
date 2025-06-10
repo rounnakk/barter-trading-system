@@ -328,7 +328,7 @@ async def get_nearby_products(
     latitude: float,
     longitude: float,
     max_distance: int = 50000,  # 50 km default radius
-    limit: int = 20
+    limit: int = 1000  # Increase default limit to 1000
 ):
     try:
         # Find products near the given coordinates
@@ -344,7 +344,7 @@ async def get_nearby_products(
                     }
                 }
             }
-        ).limit(limit))
+        ))  # Removed the limit parameter
         
         # Convert ObjectId to string for JSON serialization
         for product in nearby_products:
@@ -356,11 +356,11 @@ async def get_nearby_products(
     except Exception as e:
         print(f"Error fetching nearby products: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching nearby products: {str(e)}")
-
+    
 @app.get("/products")
 async def get_products(
     skip: int = Query(0, ge=0), 
-    limit: int = Query(20, ge=1, le=100), 
+    limit: int = Query(1000, ge=1),  # Increase default limit to 1000
     category: Optional[str] = None,
     search: Optional[str] = None
 ):
@@ -375,8 +375,6 @@ async def get_products(
         if category and category.lower() != 'all':
             # Check if the category field exists
             query["categories"] = {"$regex": category, "$options": "i"}
-            # Alternative approach: check if category is in the array
-            # query["categories"] = {"$in": [category]}
             
         # Text search if provided
         if search:
@@ -387,8 +385,8 @@ async def get_products(
         
         print(f"MongoDB query: {query}")
             
-        # Get products
-        products = list(products_collection.find(query).sort("created_at", -1).skip(skip).limit(limit))
+        # Get products - removed the limit parameter to get all products
+        products = list(products_collection.find(query).sort("created_at", -1).skip(skip))
         print(f"Found {len(products)} products matching query")
         
         # Convert ObjectId to string for JSON serialization
@@ -401,7 +399,6 @@ async def get_products(
     except Exception as e:
         print(f"Error fetching products: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching products: {str(e)}")
-
 
 # Add API endpoints
 VISION_API_URL = "https://api-inference.huggingface.co/models/google/vit-base-patch16-224"
