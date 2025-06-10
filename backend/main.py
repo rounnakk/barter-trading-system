@@ -1451,7 +1451,72 @@ async def get_unread_count(user_id: str = Query(...)):
         raise HTTPException(status_code=500, detail=f"Error getting unread count: {str(e)}")
 
 
+# Initialize model and processor globally to avoid reloading (reduces latency)
+processor = None
+model = None
+
+def load_model():
+    global processor, model
+    if processor is None or model is None:
+        print("Loading model for the first time...")
+        processor = ViTImageProcessor.from_pretrained('google/vit-base-patch16-224', token=HF_API_KEY)
+        model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224', token=HF_API_KEY)
+        print("Model loaded successfully")
+    return processor, model
+
+def classify_from_file(image_path):
+    try:
+        if not os.path.exists(image_path):
+            return None
+        image = Image.open(image_path)
+        return get_top_prediction(image)
+    except Exception as e:
+        print(f"Error classifying from file: {str(e)}")
+        return None
+
+def get_top_prediction(image):
+    try:
+        processor, model = load_model()
+        inputs = processor(images=image, return_tensors="pt")
+        outputs = model(**inputs)
+        logits = outputs.logits
+        
+        # Get only the top prediction
+        predicted_class_idx = logits.argmax(-1).item()
+        label = model.config.id2label[predicted_class_idx]
+        
+        return label
+    except Exception as e:
+        print(f"Error getting prediction: {str(e)}")
+        return None
+
+@app.post("/api/search_by_image")
+async def search_by_image(file: UploadFile = File(...)):
+    try:
+        print(f"Received image: {file.filename}, size: {file.size} bytes")
+        # Read the image
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        
+        # Get classification
+        print("Calling get_top_prediction...")
+        label = get_top_prediction(image)
+        print(f"Prediction result: {label}")
+        
+        # Return result
+        return {"label": label}
+    except Exception as e:
+        print(f"Error in search_by_image: {str(e)}")
+        return {"error": str(e)}
+
+
 
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+
+
+
+
