@@ -10,7 +10,7 @@ import { LocationProvider } from './context/LocationContext.tsx';
 import { ChatProvider } from './context/ChatContext.tsx';
 import ChatInbox from './Pages/Chat/ChatInbox.tsx'; // Import the ChatInbox component if you have one
 import ChatPage from './Pages/Chat/ChatPage.tsx'; // Import the ChatPage component
-import { SearchResults } from './Pages/Search/SearchResults';
+import { SearchResults } from './Pages/Search/SearchResults.tsx';
 
 
 function ChatNavigationHandler() {
