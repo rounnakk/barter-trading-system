@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation as useRouterLocation, Link } from 'react-router-dom';
 import { Loader2, Package, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Navbar } from '../../Components/Navbar';
-import { Button } from '../../Components/ui/button';
+import { Navbar } from '../../Components/Navbar.tsx';
+import { Button } from '../../Components/ui/button.tsx';
 import { Toaster } from 'sonner';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 // Import the API URL
 const API_URL = "https://bartrade.koyeb.app";
