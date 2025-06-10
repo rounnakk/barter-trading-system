@@ -370,6 +370,14 @@ async def get_products(
         # Add debugging
         print(f"Category filter: {category}")
         print(f"Search term: {search}")
+
+        if search:
+            # Create a search pattern that's more flexible
+            query["$or"] = [
+                {"name": {"$regex": search, "$options": "i"}},  # Case-insensitive name search
+                {"description": {"$regex": search, "$options": "i"}},  # Search in description
+                {"categories": {"$regex": search, "$options": "i"}}  # Search in categories
+            ]
         
         # Filter by category if provided and not 'All'
         if category and category.lower() != 'all':

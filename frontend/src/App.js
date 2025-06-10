@@ -10,6 +10,8 @@ import { LocationProvider } from './context/LocationContext.tsx';
 import { ChatProvider } from './context/ChatContext.tsx';
 import ChatInbox from './Pages/Chat/ChatInbox.tsx'; // Import the ChatInbox component if you have one
 import ChatPage from './Pages/Chat/ChatPage.tsx'; // Import the ChatPage component
+import { SearchResults } from './Pages/Search/SearchResults';
+
 
 function ChatNavigationHandler() {
   const navigate = useNavigate();
@@ -41,6 +43,8 @@ function App() {
               <Route path='/donation' element={<DonatedProducts />}/>
               <Route path='/chats' element={<ChatInbox />} />
               <Route path='/chats/:roomId' element={<ChatPage />} />
+              <Route path="/search" element={<SearchResults />} />
+
             </Routes>
           </Router>
         </ChatProvider>

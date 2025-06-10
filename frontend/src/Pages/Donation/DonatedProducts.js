@@ -38,7 +38,7 @@ const DonatedProducts = () => {
       try {
         setLoading(true);
         const categoryParam = activeCategory !== 'All' ? `?category=${activeCategory}` : '';
-        const response = await fetch(`https://bartrade.koyeb.app/donations${categoryParam}`);
+        const response = await fetch(`${API_URL}/donations${categoryParam}`);
         
         if (!response.ok) {
           throw new Error('Failed to fetch donations');
