@@ -23,7 +23,7 @@ export function Navbar({ searchTerm = '', setSearchTerm, handleSearch }: NavbarP
   
   // Function to navigate to donate page
   const navigateToDonate = () => {
-    navigate('/donate');
+    navigate('/donation');
   };
 
   const onSearchSubmit = (e: React.FormEvent) => {
