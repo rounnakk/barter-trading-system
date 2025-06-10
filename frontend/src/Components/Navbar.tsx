@@ -26,23 +26,35 @@ export function Navbar({ searchTerm = '', setSearchTerm, handleSearch }: NavbarP
     navigate('/donation');
   };
 
+  // Modified search submission handler
   const onSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent the default form submission behavior
+    e.stopPropagation();
+    
+    // Check if search term exists and isn't just whitespace
     if (searchTerm?.trim()) {
       // Navigate to search page with query parameter
-      navigate(`/search?q=${encodeURIComponent(searchTerm)}`);
+      navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
     }
+    
+    // Don't call the parent handleSearch function 
+    // as we're handling navigation directly here
   };
 
   return (
     <header className="sticky top-0 z-50 border-b bg-white/80 backdrop-blur-sm">
       <div className="container flex h-14 items-center justify-between px-4">
         <Link to="/" className="flex items-center space-x-2">
-          {/* Logo */}
+          <div className='h-9 w-9 overflow-hidden rounded-3xl'>
+            <img className='filter invert' src='/bt.png' alt="Logo" />
+          </div>
+          <span className="font-semibold hidden sm:inline-block">Barter Trade</span>
         </Link>
 
         <div className="flex flex-1 items-center justify-center gap-2 px-4">
-          {/* Always use the form with navigation */}
+          {/* Always use our own form submission handler */}
           <form onSubmit={onSearchSubmit} className="relative flex-1 max-w-md">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
@@ -50,8 +62,25 @@ export function Navbar({ searchTerm = '', setSearchTerm, handleSearch }: NavbarP
               className="pl-8" 
               value={searchTerm}
               onChange={(e) => setSearchTerm && setSearchTerm(e.target.value)}
+              // Add an onKeyDown handler for the Enter key
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (searchTerm?.trim()) {
+                    navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+                  }
+                }
+              }}
             />
-            <Button type="submit" className="sr-only">Search</Button>
+            {/* Add a visible search button */}
+            <Button 
+              type="submit" 
+              size="sm" 
+              variant="ghost" 
+              className="absolute right-0 top-0 h-full px-3"
+            >
+              Search
+            </Button>
           </form>
           
           <ImageSearchModal />
